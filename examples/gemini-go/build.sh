@@ -17,4 +17,5 @@ echo "✅ Build complete:"
 ls -lh "$OUTPUT_DIR/"
 
 echo ""
-echo "Usage: GEMINI_API_KEY=your-key ./$OUTPUT_DIR/$BINARY_NAME"
+echo "Usage: ./$OUTPUT_DIR/$BINARY_NAME -config config.yaml"
+echo "       (API key: config.yaml or GEMINI_API_KEY env)"

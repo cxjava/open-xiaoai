@@ -4,49 +4,61 @@ import (
 	"context"
 	"io"
 	"log"
-	"os"
 
 	"google.golang.org/genai"
 )
 
-const defaultModel = "gemini-2.0-flash-live-001"
-
 type GeminiCallbacks struct {
-	OnAudio      func(data []byte)
-	OnText       func(text string)
-	SetSpeaking  func(speaking bool)
+	OnAudio     func(data []byte)
+	OnText      func(text string)
+	SetSpeaking func(speaking bool)
 }
 
-func getAPIKey() string {
-	if key := os.Getenv("GEMINI_API_KEY"); key != "" {
-		return key
+func startGemini(ctx context.Context, cfg *AppConfig, cb GeminiCallbacks) error {
+	apiKey := cfg.GetAPIKey()
+	if apiKey == "" {
+		log.Fatal("❌ 请设置 GEMINI_API_KEY 环境变量或在 config.yaml 中配置 gemini.api_key")
 	}
-	return "你的 API KEY"
-}
 
-func startGemini(ctx context.Context, cb GeminiCallbacks) error {
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey:  getAPIKey(),
+		APIKey:  apiKey,
 		Backend: genai.BackendGeminiAPI,
 	})
 	if err != nil {
 		return err
 	}
 
+	sysInst := cfg.Gemini.SystemInstruction
+	if sysInst == "" {
+		sysInst = "你是小爱音箱，请用中文回答用户的问题。"
+	}
+	lang := cfg.Gemini.Speech.Language
+	if lang == "" {
+		lang = "cmn-CN"
+	}
+	voice := cfg.Gemini.Speech.Voice
+	if voice == "" {
+		voice = "Leda"
+	}
+
 	config := &genai.LiveConnectConfig{
 		ResponseModalities: []genai.Modality{genai.ModalityAudio},
 		SystemInstruction: &genai.Content{
-			Parts: []*genai.Part{{Text: "你是小爱音箱，请用中文回答用户的问题。"}},
+			Parts: []*genai.Part{{Text: sysInst}},
 		},
 		SpeechConfig: &genai.SpeechConfig{
-			LanguageCode: "cmn-CN",
+			LanguageCode: lang,
 			VoiceConfig: &genai.VoiceConfig{
-				PrebuiltVoiceConfig: &genai.PrebuiltVoiceConfig{VoiceName: "Leda"},
+				PrebuiltVoiceConfig: &genai.PrebuiltVoiceConfig{VoiceName: voice},
 			},
 		},
 	}
 
-	session, err := client.Live.Connect(ctx, defaultModel, config)
+	model := cfg.Gemini.Model
+	if model == "" {
+		model = "gemini-2.0-flash-live-001"
+	}
+	session, err := client.Live.Connect(ctx, model, config)
 	if err != nil {
 		return err
 	}
@@ -127,4 +139,19 @@ func sendAudioToGemini(data []byte) {
 	if err != nil {
 		log.Printf("❌ send audio to Gemini: %v", err)
 	}
+}
+
+// sendTextToGemini sends user text to Gemini (e.g. from instruction event).
+// This triggers Gemini to interrupt current response and process the new input.
+func sendTextToGemini(text string) {
+	s := geminiSession
+	if s == nil || text == "" {
+		return
+	}
+	err := s.SendRealtimeInput(genai.LiveRealtimeInput{Text: text})
+	if err != nil {
+		log.Printf("❌ send text to Gemini: %v", err)
+		return
+	}
+	log.Printf("⏹️ 已发送用户文本打断: %s", text)
 }

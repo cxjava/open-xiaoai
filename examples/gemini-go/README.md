@@ -9,6 +9,7 @@
 - **实时语音对话**：16kHz PCM 输入 → Gemini 推理 → 24kHz PCM 输出
 - **自动 VAD**：由 Gemini 服务端处理，无需本地模型
 - **回声抑制**：AI 说话时不转发麦克风输入，避免回声
+- **关键词打断**：仅当用户说出配置的关键词（如「召唤小智」）时才触发打断
 - **单二进制**：无 Python/Rust 依赖，`go build` 即部署
 
 ## 快速开始
@@ -26,16 +27,23 @@ cd examples/gemini-go
 bash build.sh
 ```
 
-### 2. 运行
+### 2. 编辑配置
 
 ```shell
-# 设置 API Key 后运行
-GEMINI_API_KEY=你的API密钥 ./dist/gemini-go
+vim config.yaml
 ```
 
-### 3. 连接音箱
+修改 `gemini.api_key`（或使用环境变量 `GEMINI_API_KEY`），以及 `interrupt.keywords` 等。
 
-确保小爱音箱的 client 已连接到本机 `ws://你的IP:4399`。
+### 3. 运行
+
+```shell
+./dist/gemini-go -config config.yaml
+```
+
+### 4. 连接音箱
+
+确保小爱音箱的 client 已连接到本机（默认 `ws://你的IP:4399`，可在 config 中修改端口）。
 
 ## 数据流
 
@@ -53,10 +61,22 @@ GEMINI_API_KEY=你的API密钥 ./dist/gemini-go
 | 构建 | uv + maturin + Rust + PyO3 | `go build` |
 | 部署 | Python 环境 + .so | 单二进制 (~13MB) |
 | 依赖 | google-genai + numpy | google.golang.org/genai |
+| 打断 | 不支持 | 支持（instruction 事件） |
 | FFI | PyO3 桥接 | 无 |
+
+## 配置说明
+
+| 配置项 | 说明 |
+|--------|------|
+| `server.host` / `server.port` | 服务端监听地址和端口 |
+| `gemini.api_key` | API 密钥（环境变量 `GEMINI_API_KEY` 优先） |
+| `gemini.model` | 模型名称 |
+| `gemini.system_instruction` | 系统提示词 |
+| `gemini.speech.language` / `voice` | 语音合成配置 |
+| `interrupt.keywords` | 打断触发的关键词列表 |
+| `interrupt.match_mode` | 匹配模式：`exact` / `prefix` / `contains` |
+| `greeting` | 连接成功后播放的提示语 |
 
 ## 注意事项
 
-- **暂不支持中断**：需等待 AI 回答完毕才能重新响应用户语音
-- 默认模型 `gemini-2.0-flash-live-001`，可在 `gemini.go` 中修改
-- 系统提示词在 `gemini.go` 中硬编码，可按需修改
+- **打断机制**：仅当用户说出 `interrupt.keywords` 中的关键词时才触发打断，依赖小爱音箱的 instruction 事件。

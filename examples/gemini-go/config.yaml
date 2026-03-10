@@ -1,0 +1,28 @@
+# 服务端监听配置
+server:
+  host: "0.0.0.0"
+  port: 4399
+
+# Gemini API 配置
+gemini:
+  # API 密钥（也可通过环境变量 GEMINI_API_KEY 设置，环境变量优先）
+  api_key: "你的 API KEY"
+  model: "gemini-2.0-flash-live-001"
+  # 系统提示词
+  system_instruction: "你是小爱音箱，请用中文回答用户的问题。"
+  # 语音合成配置
+  speech:
+    language: "cmn-CN"
+    voice: "Leda"
+
+# 打断配置：仅当用户说出以下关键词时才触发打断
+interrupt:
+  # 关键词列表（支持精确匹配或包含匹配，由 match_mode 控制）
+  keywords:
+    - "召唤小智"
+    - "小智"
+  # 匹配模式: exact=精确匹配, prefix=前缀匹配, contains=包含即可
+  match_mode: "exact"
+
+# 连接成功后播放的提示语
+greeting: "已连接"

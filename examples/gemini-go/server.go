@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/coder/websocket"
@@ -17,11 +18,56 @@ import (
 	"github.com/idootop/open-xiaoai/packages/client-go/utils"
 )
 
+// instructionEventData is the payload of instruction event from client (FileMonitorEvent).
+type instructionEventData struct {
+	Type string `json:"Type"`
+	Line string `json:"Line"`
+}
+
+// instructionLogLine is one line from instruction.log (SpeechRecognizer result).
+type instructionLogLine struct {
+	Header struct {
+		Namespace string `json:"namespace"`
+		Name      string `json:"name"`
+	} `json:"header"`
+	Payload struct {
+		IsFinal bool `json:"is_final"`
+		Results []struct {
+			Text string `json:"text"`
+		} `json:"results"`
+	} `json:"payload"`
+}
+
+// parseInstructionUserText extracts final user speech text from instruction event.
+// Returns non-empty string only when IsFinal and text is present.
+func parseInstructionUserText(data json.RawMessage) string {
+	var ev instructionEventData
+	if err := json.Unmarshal(data, &ev); err != nil || ev.Type != "NewLine" || ev.Line == "" {
+		return ""
+	}
+	var msg instructionLogLine
+	if err := json.Unmarshal([]byte(ev.Line), &msg); err != nil {
+		return ""
+	}
+	if !strings.EqualFold(msg.Header.Namespace, "SpeechRecognizer") ||
+		!strings.EqualFold(msg.Header.Name, "RecognizeResult") {
+		return ""
+	}
+	if !msg.Payload.IsFinal || len(msg.Payload.Results) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(msg.Payload.Results[0].Text)
+}
+
 // onRecordStream is set by main to route incoming audio to Gemini.
 var onRecordStream func(data []byte)
 
-func startServer(ctx context.Context) error {
-	addr := "0.0.0.0:4399"
+// onUserInterrupt is called when user speaks (instruction event) and text matches interrupt keywords.
+// Main sets it to: stop playback, allow mic through, and send text to Gemini for interrupt.
+var onUserInterrupt func(userText string)
+
+func startServer(ctx context.Context, cfg *AppConfig) error {
+	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("bind %s: %w", addr, err)
@@ -37,7 +83,7 @@ func startServer(ctx context.Context) error {
 			log.Printf("❌ WebSocket accept: %v", err)
 			return
 		}
-		handleConnection(conn, r.RemoteAddr)
+		handleConnection(conn, r.RemoteAddr, cfg)
 	})
 
 	server := &http.Server{Handler: mux}
@@ -49,9 +95,9 @@ func startServer(ctx context.Context) error {
 	return server.Serve(listener)
 }
 
-func handleConnection(conn *websocket.Conn, addr string) {
+func handleConnection(conn *websocket.Conn, addr string, cfg *AppConfig) {
 	log.Printf("✅ 已连接: %s", addr)
-	initConnection(conn)
+	initConnection(conn, cfg)
 
 	if err := connect.GetMessageManager().ProcessMessages(); err != nil {
 		log.Printf("❌ 消息处理异常: %v", err)
@@ -61,11 +107,18 @@ func handleConnection(conn *websocket.Conn, addr string) {
 	log.Printf("❌ 已断开连接: %s", addr)
 }
 
-func initConnection(conn *websocket.Conn) {
+func initConnection(conn *websocket.Conn, cfg *AppConfig) {
 	connect.GetMessageManager().Init(conn)
 
 	connect.GetHandlers().SetEventHandler(func(event connect.Event) error {
-		log.Printf("🔥 收到 Event: %+v", event)
+		log.Printf("🔥 收到 Event: %s", event.Event)
+		if event.Event == "instruction" && onUserInterrupt != nil && event.Data != nil {
+			text := parseInstructionUserText(*event.Data)
+			if text != "" && cfg.ShouldInterrupt(text) {
+				// Run in goroutine to avoid blocking read loop (onUserInterrupt calls RPC).
+				go onUserInterrupt(text)
+			}
+		}
 		return nil
 	})
 	connect.GetHandlers().SetStreamHandler(func(stream connect.Stream) error {
@@ -87,7 +140,11 @@ func initConnection(conn *websocket.Conn) {
 
 		rpc := connect.GetRPC()
 
-		rpc.CallRemote("run_shell", "/usr/sbin/tts_play.sh '已连接'", nil)
+		greeting := cfg.Greeting
+		if greeting == "" {
+			greeting = "已连接"
+		}
+		rpc.CallRemote("run_shell", "/usr/sbin/tts_play.sh '"+greeting+"'", nil)
 
 		rpc.CallRemote("start_recording", audio.AudioConfig{
 			PCM:           "noop",
