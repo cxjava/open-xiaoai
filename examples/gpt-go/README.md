@@ -54,12 +54,15 @@ bash build.sh
 
 | 配置项 | 说明 |
 |--------|------|
+| `server.host` / `server.port` | 服务端监听地址和端口 |
 | `openai.base_url` | API 地址，支持 OpenAI / DeepSeek / 通义千问等 |
 | `openai.api_key` | API 密钥 |
 | `openai.model` | 模型名称 |
 | `prompt.system` | 系统提示词 |
 | `context.history_max_length` | 对话历史条数（0=关闭） |
 | `call_ai_keywords` | 触发 AI 的关键词列表 |
+| `greeting` | 连接成功后播放的提示语 |
+| `error_message` | 出错时的提示语 |
 | `custom_replies` | 固定回复规则（match + text/url） |
 
 ## 自定义回复示例
@@ -83,6 +86,6 @@ custom_replies:
 
 ## 注意事项
 
-- 默认端口 `4399`，确保未被占用
+- 默认监听 `0.0.0.0:4399`，可在 config 中修改
 - 默认不开启录音/播放，仅处理 instruction 事件（语音识别结果）
 - 如需接收原始音频流，需在 client 端启用 start_recording / start_play

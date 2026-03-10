@@ -19,6 +19,7 @@ func main() {
 	engine := NewEngine(cfg, speaker)
 
 	log.Println("✅ GPT-Go 已启动")
+	log.Printf("   监听: %s:%d", cfg.Server.Host, cfg.Server.Port)
 	log.Printf("   模型: %s", cfg.OpenAI.Model)
 	log.Printf("   关键词: %v", cfg.CallAIKeywords)
 

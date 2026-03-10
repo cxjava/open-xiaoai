@@ -17,7 +17,8 @@ import (
 )
 
 func startServer(ctx context.Context, engine *Engine) error {
-	addr := "0.0.0.0:4399"
+	cfg := engine.config
+	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("bind %s: %w", addr, err)
@@ -81,7 +82,11 @@ func initConnection(conn *websocket.Conn, engine *Engine) {
 	go func() {
 		time.Sleep(1 * time.Second)
 		rpc := connect.GetRPC()
-		rpc.CallRemote("run_shell", "/usr/sbin/tts_play.sh '已连接'", nil)
+		greeting := engine.config.Greeting
+		if greeting == "" {
+			greeting = "已连接"
+		}
+		rpc.CallRemote("run_shell", "/usr/sbin/tts_play.sh '"+greeting+"'", nil)
 	}()
 }
 

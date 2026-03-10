@@ -154,7 +154,11 @@ func (e *Engine) handleMessage(ctx context.Context, text string) {
 			return
 		}
 		log.Printf("❌ AI error: %v", err)
-		e.speaker.PlayTTS("出错了，请稍后再试吧！", true)
+		msg := e.config.ErrorMessage
+		if msg == "" {
+			msg = "出错了，请稍后再试吧！"
+		}
+		e.speaker.PlayTTS(msg, true)
 		return
 	}
 
