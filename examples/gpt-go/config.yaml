@@ -1,0 +1,31 @@
+# OpenAI API 配置（支持兼容 OpenAI 接口的第三方服务，如 DeepSeek）
+openai:
+  # 接口地址，以 /v1 结尾
+  base_url: "https://api.openai.com/v1"
+  # base_url: "https://api.deepseek.com/v1"
+  # API 密钥
+  api_key: "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  # 模型名称  
+  model: "gpt-4.1-mini"
+  # model: "deepseek-chat"
+
+# 系统提示词
+prompt:
+  system: "你是一个智能助手，请根据用户的问题给出回答。"
+
+# 上下文配置
+context:
+  # 每次对话携带的最大历史消息数（0 = 关闭）
+  history_max_length: 10
+
+# 只回答以下关键词开头的消息
+call_ai_keywords:
+  - "请"
+  - "你"
+
+# 自定义固定回复（精确匹配用户消息）
+custom_replies:
+  - match: "测试播放文字"
+    text: "你好，很高兴认识你！"
+  - match: "测试播放音乐"
+    url: "https://example.com/hello.mp3"
