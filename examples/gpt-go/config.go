@@ -12,6 +12,11 @@ type ServerConfig struct {
 	Port int    `yaml:"port"`
 }
 
+type AuthConfig struct {
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+}
+
 type OpenAIConfig struct {
 	BaseURL string `yaml:"base_url"`
 	APIKey  string `yaml:"api_key"`
@@ -34,6 +39,7 @@ type CustomReply struct {
 
 type AppConfig struct {
 	Server         ServerConfig  `yaml:"server"`
+	Auth           AuthConfig    `yaml:"auth"`
 	OpenAI         OpenAIConfig  `yaml:"openai"`
 	Prompt         PromptConfig  `yaml:"prompt"`
 	Context        ContextConfig `yaml:"context"`

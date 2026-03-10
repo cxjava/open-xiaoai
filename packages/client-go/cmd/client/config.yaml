@@ -1,0 +1,4 @@
+# WebSocket 认证（为空则跳过，需与服务端 auth 配置一致）
+auth:
+  username: ""
+  password: ""

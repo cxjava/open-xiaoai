@@ -13,6 +13,11 @@ type ServerConfig struct {
 	Port int    `yaml:"port"`
 }
 
+type AuthConfig struct {
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+}
+
 type GeminiSpeechConfig struct {
 	Language string `yaml:"language"`
 	Voice    string `yaml:"voice"`
@@ -32,6 +37,7 @@ type InterruptConfig struct {
 
 type AppConfig struct {
 	Server    ServerConfig    `yaml:"server"`
+	Auth      AuthConfig      `yaml:"auth"`
 	Gemini    GeminiConfig    `yaml:"gemini"`
 	Interrupt InterruptConfig `yaml:"interrupt"`
 	Greeting  string          `yaml:"greeting"`

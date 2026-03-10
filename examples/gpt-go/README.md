@@ -61,6 +61,7 @@ bash build.sh
 | `prompt.system` | 系统提示词 |
 | `context.history_max_length` | 对话历史条数（0=关闭） |
 | `call_ai_keywords` | 触发 AI 的关键词列表 |
+| `auth.username` / `auth.password` | WebSocket 认证（为空则跳过） |
 | `greeting` | 连接成功后播放的提示语 |
 | `error_message` | 出错时的提示语 |
 | `custom_replies` | 固定回复规则（match + text/url） |

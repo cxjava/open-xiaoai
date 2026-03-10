@@ -69,6 +69,7 @@ vim config.yaml
 | 配置项 | 说明 |
 |--------|------|
 | `server.host` / `server.port` | 服务端监听地址和端口 |
+| `auth.username` / `auth.password` | WebSocket 认证（为空则跳过） |
 | `gemini.api_key` | API 密钥（环境变量 `GEMINI_API_KEY` 优先） |
 | `gemini.model` | 模型名称 |
 | `gemini.system_instruction` | 系统提示词 |

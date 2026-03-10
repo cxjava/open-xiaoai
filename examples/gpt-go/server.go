@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/coder/websocket"
@@ -15,6 +17,22 @@ import (
 	"github.com/idootop/open-xiaoai/packages/client-go/services/connect"
 	"github.com/idootop/open-xiaoai/packages/client-go/utils"
 )
+
+func parseBasicAuth(r *http.Request) (username, password string, ok bool) {
+	auth := r.Header.Get("Authorization")
+	if !strings.HasPrefix(auth, "Basic ") {
+		return "", "", false
+	}
+	payload, err := base64.StdEncoding.DecodeString(auth[6:])
+	if err != nil {
+		return "", "", false
+	}
+	pair := strings.SplitN(string(payload), ":", 2)
+	if len(pair) != 2 {
+		return "", "", false
+	}
+	return pair[0], pair[1], true
+}
 
 func startServer(ctx context.Context, engine *Engine) error {
 	cfg := engine.config
@@ -27,6 +45,19 @@ func startServer(ctx context.Context, engine *Engine) error {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// 认证：若 username 和 password 均非空则校验，否则跳过
+		if cfg.Auth.Username != "" && cfg.Auth.Password != "" {
+			user, pass, ok := parseBasicAuth(r)
+			if !ok {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			if user != cfg.Auth.Username || pass != cfg.Auth.Password {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
+
 		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 			InsecureSkipVerify: true,
 		})

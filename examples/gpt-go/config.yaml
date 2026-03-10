@@ -3,6 +3,11 @@ server:
   host: "0.0.0.0"
   port: 4399
 
+# WebSocket 认证（为空则跳过验证）
+auth:
+  username: ""
+  password: ""
+
 # OpenAI API 配置（支持兼容 OpenAI 接口的第三方服务，如 DeepSeek）
 openai:
   # 接口地址，以 /v1 结尾

@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
-	"os"
+	"net/http"
 	"time"
 
 	"github.com/coder/websocket"
@@ -16,6 +18,12 @@ import (
 	"github.com/idootop/open-xiaoai/packages/client-go/services/monitor"
 	"github.com/idootop/open-xiaoai/packages/client-go/utils"
 )
+
+func basicAuthHeader(username, password string) string {
+	credentials := username + ":" + password
+	encoded := base64.StdEncoding.EncodeToString([]byte(credentials))
+	return "Basic " + encoded
+}
 
 type AppClient struct {
 	kwsMonitor         *monitor.KwsMonitor
@@ -31,8 +39,14 @@ func NewAppClient() *AppClient {
 	}
 }
 
-func (c *AppClient) connectWS(ctx context.Context, serverURL string) (*websocket.Conn, error) {
-	conn, _, err := websocket.Dial(ctx, serverURL, nil)
+func (c *AppClient) connectWS(ctx context.Context, serverURL string, cfg *ClientConfig) (*websocket.Conn, error) {
+	opts := &websocket.DialOptions{}
+	if cfg != nil && cfg.Auth.Username != "" && cfg.Auth.Password != "" {
+		opts.HTTPHeader = http.Header{
+			"Authorization": []string{basicAuthHeader(cfg.Auth.Username, cfg.Auth.Password)},
+		}
+	}
+	conn, _, err := websocket.Dial(ctx, serverURL, opts)
 	if err != nil {
 		return nil, fmt.Errorf("websocket dial: %w", err)
 	}
@@ -77,15 +91,31 @@ func (c *AppClient) dispose() {
 }
 
 func (c *AppClient) run() {
-	if len(os.Args) < 2 {
-		log.Fatal("❌ 请输入服务器地址")
+	configPath := flag.String("config", "", "配置文件路径（不提供则跳过认证）")
+	flag.Parse()
+
+	if flag.NArg() < 1 {
+		log.Fatal("❌ 请输入服务器地址，例如: ./client ws://192.168.31.227:4399")
 	}
-	serverURL := os.Args[1]
+	serverURL := flag.Arg(0)
+
+	var cfg *ClientConfig
+	if *configPath != "" {
+		var err error
+		cfg, err = loadClientConfig(*configPath)
+		if err != nil {
+			log.Fatalf("❌ 加载配置失败: %v", err)
+		}
+		if cfg.Auth.Username != "" && cfg.Auth.Password != "" {
+			log.Println("🔐 已启用认证")
+		}
+	}
+
 	log.Println("✅ 已启动")
 
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		conn, err := c.connectWS(ctx, serverURL)
+		conn, err := c.connectWS(ctx, serverURL, cfg)
 		cancel()
 
 		if err != nil {

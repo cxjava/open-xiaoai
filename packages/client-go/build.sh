@@ -17,5 +17,7 @@ echo "🔥 Cross-compiling for ARM (小爱音箱 Pro)..."
 CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 \
     go build -ldflags="-s -w" -o "$OUTPUT_DIR/${BINARY_NAME}-arm7" ./cmd/client/
 
+cp -f "$SCRIPT_DIR/cmd/client/config.yaml" "$OUTPUT_DIR/" 2>/dev/null || true
+
 echo "✅ Build complete:"
 ls -lh "$OUTPUT_DIR/"
