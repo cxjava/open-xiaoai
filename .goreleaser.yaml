@@ -11,7 +11,7 @@ version: 2
 builds:
   - id: client-go
     dir: packages/client-go
-    binary: open-xiaoai-client
+    binary: open-xiaoai-client-go
     main: ./cmd/client/
     env:
       - CGO_ENABLED=0
@@ -63,16 +63,39 @@ upx:
     enabled: true
     
 archives:
-  - formats: [tar.gz]
-    # this name template makes the OS and Arch compatible with the results of `uname`.
+  - id: client-go
+    builds: [client-go]
+    formats: [tar.gz]
     name_template: >-
-      {{ .ProjectName }}_
+      open-xiaoai-client-go_
       {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
-    # use zip for windows archives
+  - id: gemini-go
+    builds: [gemini-go]
+    formats: [tar.gz]
+    name_template: >-
+      gemini-go_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+  - id: gpt-go
+    builds: [gpt-go]
+    formats: [tar.gz]
+    name_template: >-
+      gpt-go_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
     format_overrides:
       - goos: windows
         formats: [zip]
