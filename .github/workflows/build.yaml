@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v20260312)"
+        required: true
+        default: "v20260312"
+permissions: 
+    contents: write
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      - name: Check out code
+        uses: actions/checkout@v6
+      - name: Install UPX
+        uses: crazy-max/ghaction-upx@v4
+        with:
+          install-only: true
+          version: latest
+
+      - name: Create tag locally
+        run: git tag ${{ github.event.inputs.tag }}
+
+      # GoReleaser will take care of publishing those artifacts into the release
+      - name: Run GoReleaser
+        id: goreleaser
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: latest
+          args: release --clean --skip=validate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
