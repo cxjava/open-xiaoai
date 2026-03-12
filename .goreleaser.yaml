@@ -8,10 +8,15 @@
 
 version: 2
 
+before:
+  hooks:
+    - go mod tidy
+
 builds:
   - id: client-go
+    dir: packages/client-go
     binary: open-xiaoai-client
-    main: ./packages/client-go/cmd/client/
+    main: ./cmd/client/
     env:
       - CGO_ENABLED=0
     ldflags:
@@ -27,8 +32,9 @@ builds:
       - "7"
       
   - id: gemini-go
+    dir: examples/gemini-go
     binary: gemini-go
-    main: ./examples/gemini-go
+    main: .
     env:
       - CGO_ENABLED=0
     ldflags:
@@ -41,8 +47,9 @@ builds:
       - amd64
       - arm64
   - id: gpt-go
+    dir: examples/gpt-go
     binary: gpt-go
-    main: ./examples/gpt-go
+    main: .
     env:
       - CGO_ENABLED=0
     ldflags:
