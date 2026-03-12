@@ -8,10 +8,6 @@
 
 version: 2
 
-before:
-  hooks:
-    - go mod tidy
-
 builds:
   - id: client-go
     dir: packages/client-go
