@@ -28,7 +28,16 @@ context:
   # 每次对话携带的最大历史消息数（0 = 关闭）
   history_max_length: 10
 
-# 只回答以下关键词开头的消息
+# 打断配置：仅当关键词或唤醒词匹配时才打断（与 gemini-go 统一）
+interrupt:
+  keywords:
+    - "请"
+    - "你"
+    - "小爱同学"
+  match_mode: "prefix"   # exact, prefix, contains
+  kws_interrupt: true   # 唤醒词也触发打断
+
+# 只回答以下关键词开头的消息（用于 AI 回复判断）
 call_ai_keywords:
   - "请"
   - "你"

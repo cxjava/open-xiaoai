@@ -77,6 +77,9 @@ func (e *Engine) OnEvent(event connect.Event) {
 		e.handleInstruction(data)
 	case "kws":
 		log.Printf("🔥 唤醒词识别: %s", dataStr)
+		if e.config.Interrupt.KwsInterrupt {
+			e.InterruptOnly()
+		}
 	}
 }
 
@@ -100,10 +103,25 @@ func (e *Engine) handleInstruction(data []byte) {
 
 	text := msg.Payload.Results[0].Text
 	log.Printf("🗣️ 用户: %s", text)
+	// 仅当关键词匹配时才打断并处理
+	if !e.config.ShouldInterrupt(text) {
+		return
+	}
 	e.OnMessage(text)
 }
 
 // --- Message handling (from MiGPTEngine.onMessage) ---
+
+// InterruptOnly 仅打断当前 AI 回复，不处理新消息（用于 kws 事件）
+func (e *Engine) InterruptOnly() {
+	e.mu.Lock()
+	if e.cancelFunc != nil {
+		e.cancelFunc()
+		e.cancelFunc = nil
+	}
+	e.mu.Unlock()
+	log.Println("⏹️ 唤醒词打断")
+}
 
 func (e *Engine) OnMessage(text string) {
 	// Cancel any previous AI call / TTS in progress.

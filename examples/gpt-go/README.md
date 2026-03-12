@@ -7,6 +7,7 @@
 ## 功能
 
 - **关键词触发**：仅回答以「请」「你」等关键词开头的消息
+- **关键词/唤醒词打断**：仅当配置的关键词或唤醒词匹配时才打断 AI 回复
 - **流式回复**：OpenAI Chat Completions 流式输出，逐句 TTS 播放
 - **对话历史**：可配置的上下文长度
 - **自定义回复**：通过配置文件设置固定回复（文字/音频链接）
@@ -60,6 +61,9 @@ bash build.sh
 | `openai.model` | 模型名称 |
 | `prompt.system` | 系统提示词 |
 | `context.history_max_length` | 对话历史条数（0=关闭） |
+| `interrupt.keywords` | 打断触发的关键词（空则用 call_ai_keywords） |
+| `interrupt.match_mode` | 匹配模式：exact / prefix / contains |
+| `interrupt.kws_interrupt` | 唤醒词是否触发打断 |
 | `call_ai_keywords` | 触发 AI 的关键词列表 |
 | `auth.username` / `auth.password` | WebSocket 认证（为空则跳过） |
 | `greeting` | 连接成功后播放的提示语 |

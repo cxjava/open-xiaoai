@@ -83,6 +83,10 @@ var onRecordStream func(data []byte)
 // Main sets it to: stop playback, allow mic through, and send text to Gemini for interrupt.
 var onUserInterrupt func(userText string)
 
+// onKwsInterrupt is called when kws event fires and kws_interrupt is enabled.
+// Main sets it to: stop playback, allow mic through (no text sent to Gemini).
+var onKwsInterrupt func()
+
 func startServer(ctx context.Context, cfg *AppConfig) error {
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	listener, err := net.Listen("tcp", addr)
@@ -145,9 +149,11 @@ func initConnection(conn *websocket.Conn, cfg *AppConfig) {
 		if event.Event == "instruction" && onUserInterrupt != nil && event.Data != nil {
 			text := parseInstructionUserText(*event.Data)
 			if text != "" && cfg.ShouldInterrupt(text) {
-				// Run in goroutine to avoid blocking read loop (onUserInterrupt calls RPC).
 				go onUserInterrupt(text)
 			}
+		}
+		if event.Event == "kws" && cfg.Interrupt.KwsInterrupt && onKwsInterrupt != nil {
+			go onKwsInterrupt()
 		}
 		return nil
 	})

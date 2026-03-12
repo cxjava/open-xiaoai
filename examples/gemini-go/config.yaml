@@ -20,14 +20,13 @@ gemini:
     language: "cmn-CN"
     voice: "Leda"
 
-# 打断配置：仅当用户说出以下关键词时才触发打断
+# 打断配置：仅当关键词或唤醒词匹配时才打断（与 gpt-go 统一）
 interrupt:
-  # 关键词列表（支持精确匹配或包含匹配，由 match_mode 控制）
   keywords:
     - "召唤小智"
     - "小智"
-  # 匹配模式: exact=精确匹配, prefix=前缀匹配, contains=包含即可
-  match_mode: "exact"
+  match_mode: "exact"    # exact, prefix, contains
+  kws_interrupt: true   # 唤醒词也触发打断
 
 # 连接成功后播放的提示语
 greeting: "已连接"

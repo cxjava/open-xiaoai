@@ -21,7 +21,7 @@ func main() {
 	log.Println("✅ GPT-Go 已启动")
 	log.Printf("   监听: %s:%d", cfg.Server.Host, cfg.Server.Port)
 	log.Printf("   模型: %s", cfg.OpenAI.Model)
-	log.Printf("   关键词: %v", cfg.CallAIKeywords)
+	log.Printf("   打断: keywords=%v match=%s kws=%v", cfg.Interrupt.Keywords, cfg.Interrupt.MatchMode, cfg.Interrupt.KwsInterrupt)
 
 	ctx := context.Background()
 	if err := startServer(ctx, engine); err != nil {

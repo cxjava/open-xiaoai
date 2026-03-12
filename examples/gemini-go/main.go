@@ -57,18 +57,24 @@ func main() {
 		sendAudioToGemini(data)
 	}
 
-	// Interrupt: when user speaks (instruction event), stop playback and send text to Gemini.
+	// Interrupt (instruction): stop playback, send text to Gemini.
 	onUserInterrupt = func(userText string) {
 		log.Printf("🗣️ 用户打断: %s", userText)
-		// 1. Stop speaker playback immediately
 		if _, err := connect.GetRPC().CallRemote("stop_play", nil, nil); err != nil {
 			log.Printf("❌ stop_play: %v", err)
 		}
-		// 2. Allow mic through so Gemini receives user audio
 		isAISpeaking.Store(false)
-		// 3. Send recognized text to Gemini to trigger interrupt
 		sendTextToGemini(userText)
-		// 4. Mark that we need to restart play before next audio
+		needRestartPlay.Store(true)
+	}
+
+	// Interrupt (kws): stop playback only, allow mic through.
+	onKwsInterrupt = func() {
+		log.Println("🗣️ 唤醒词打断")
+		if _, err := connect.GetRPC().CallRemote("stop_play", nil, nil); err != nil {
+			log.Printf("❌ stop_play: %v", err)
+		}
+		isAISpeaking.Store(false)
 		needRestartPlay.Store(true)
 	}
 
@@ -103,7 +109,7 @@ func main() {
 	}()
 
 	log.Printf("✅ Gemini-Go 已启动: %s:%d", cfg.Server.Host, cfg.Server.Port)
-	log.Printf("   打断关键词: %v (match=%s)", cfg.Interrupt.Keywords, cfg.Interrupt.MatchMode)
+	log.Printf("   打断: keywords=%v match=%s kws=%v", cfg.Interrupt.Keywords, cfg.Interrupt.MatchMode, cfg.Interrupt.KwsInterrupt)
 	wg.Wait()
 }
 

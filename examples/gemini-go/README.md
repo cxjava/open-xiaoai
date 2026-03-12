@@ -9,7 +9,7 @@
 - **实时语音对话**：16kHz PCM 输入 → Gemini 推理 → 24kHz PCM 输出
 - **自动 VAD**：由 Gemini 服务端处理，无需本地模型
 - **回声抑制**：AI 说话时不转发麦克风输入，避免回声
-- **关键词打断**：仅当用户说出配置的关键词（如「召唤小智」）时才触发打断
+- **关键词/唤醒词打断**：仅当配置的关键词或唤醒词匹配时才触发打断
 - **单二进制**：无 Python/Rust 依赖，`go build` 即部署
 
 ## 快速开始
@@ -75,9 +75,10 @@ vim config.yaml
 | `gemini.system_instruction` | 系统提示词 |
 | `gemini.speech.language` / `voice` | 语音合成配置 |
 | `interrupt.keywords` | 打断触发的关键词列表 |
-| `interrupt.match_mode` | 匹配模式：`exact` / `prefix` / `contains` |
+| `interrupt.match_mode` | 匹配模式：exact / prefix / contains |
+| `interrupt.kws_interrupt` | 唤醒词是否触发打断 |
 | `greeting` | 连接成功后播放的提示语 |
 
 ## 注意事项
 
-- **打断机制**：仅当用户说出 `interrupt.keywords` 中的关键词时才触发打断，依赖小爱音箱的 instruction 事件。
+- **打断机制**：仅当 instruction 匹配 `interrupt.keywords` 或 kws 事件且 `kws_interrupt=true` 时触发，与 gpt-go 配置统一。
