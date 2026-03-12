@@ -23,6 +23,13 @@ func (s *Speaker) AbortXiaoAI() error {
 	return err
 }
 
+// StopTTS 轻打断：终止 client 端当前 tts_play.sh / miplayer 进程
+func (s *Speaker) StopTTS() error {
+	log.Println("⏹️ 轻打断: 终止当前 TTS")
+	_, err := connect.GetRPC().CallRemote("stop_tts", nil, nil)
+	return err
+}
+
 func (s *Speaker) PlayTTS(text string, blocking bool) error {
 	if blocking {
 		script := fmt.Sprintf("/usr/sbin/tts_play.sh '%s'", text)

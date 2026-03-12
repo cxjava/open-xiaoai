@@ -120,6 +120,7 @@ func (e *Engine) InterruptOnly() {
 		e.cancelFunc = nil
 	}
 	e.mu.Unlock()
+	e.speaker.StopTTS()
 	log.Println("⏹️ 唤醒词打断")
 }
 
@@ -134,6 +135,7 @@ func (e *Engine) OnMessage(text string) {
 	e.lastMsgTS = time.Now().UnixMilli()
 	e.mu.Unlock()
 
+	e.speaker.StopTTS() // 轻打断：终止 client 端当前 TTS
 	go e.handleMessage(ctx, text)
 }
 
@@ -157,9 +159,9 @@ func (e *Engine) handleMessage(ctx context.Context, text string) {
 		return
 	}
 
-	// 3. Abort XiaoAI's native response
-	if err := e.speaker.AbortXiaoAI(); err != nil {
-		log.Printf("❌ abort error: %v", err)
+	// 3. 轻打断：终止 client 端当前 TTS（替代 AbortXiaoAI 重启服务）
+	if err := e.speaker.StopTTS(); err != nil {
+		log.Printf("❌ stop_tts error: %v", err)
 	}
 
 	// 4. Stream from OpenAI → sentence-by-sentence TTS

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/coder/websocket"
@@ -63,6 +64,7 @@ func (c *AppClient) init(conn *websocket.Conn) {
 	rpc := connect.GetRPC()
 	rpc.AddCommand("get_version", getVersion)
 	rpc.AddCommand("run_shell", runShell)
+	rpc.AddCommand("stop_tts", stopTTS)
 	rpc.AddCommand("start_play", startPlay)
 	rpc.AddCommand("stop_play", stopPlay)
 	rpc.AddCommand("start_recording", startRecording)
@@ -143,6 +145,10 @@ func getVersion(_ connect.Request) (connect.Response, error) {
 	return connect.Response{ID: "0", Data: &raw}, nil
 }
 
+func isTTSOrPlayScript(script string) bool {
+	return strings.Contains(script, "tts_play.sh") || strings.Contains(script, "miplayer")
+}
+
 func runShell(req connect.Request) (connect.Response, error) {
 	if req.Payload == nil {
 		return connect.Response{}, fmt.Errorf("empty command")
@@ -152,7 +158,15 @@ func runShell(req connect.Request) (connect.Response, error) {
 		return connect.Response{}, fmt.Errorf("parse script: %w", err)
 	}
 	log.Printf("🐚 run_shell: %s", script)
-	res, err := utils.RunShell(script)
+
+	var res *utils.CommandResult
+	var err error
+	if isTTSOrPlayScript(script) {
+		res, err = utils.RunShellInterruptible(script, 10*60*time.Second)
+	} else {
+		res, err = utils.RunShell(script)
+	}
+
 	if err != nil {
 		log.Printf("❌ run_shell error: %v", err)
 		return connect.Response{}, err
@@ -161,6 +175,12 @@ func runShell(req connect.Request) (connect.Response, error) {
 	data, _ := json.Marshal(res)
 	raw := json.RawMessage(data)
 	return connect.Response{ID: "0", Data: &raw}, nil
+}
+
+func stopTTS(_ connect.Request) (connect.Response, error) {
+	log.Println("⏹️ stop_tts: 终止当前 TTS/播放")
+	utils.StopTTS()
+	return connect.SuccessResponse(), nil
 }
 
 func startPlay(req connect.Request) (connect.Response, error) {
