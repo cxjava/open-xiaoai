@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +35,20 @@ type Engine struct {
 func NewEngine(cfg *AppConfig, speaker *Speaker) *Engine {
 	clientCfg := openai.DefaultConfig(cfg.OpenAI.APIKey)
 	clientCfg.BaseURL = cfg.OpenAI.BaseURL
+
+	if cfg.Proxy != "" {
+		proxyURL, err := url.Parse(cfg.Proxy)
+		if err != nil {
+			log.Printf("⚠️ 无效的代理地址 %q: %v，将不使用代理", cfg.Proxy, err)
+		} else {
+			clientCfg.HTTPClient = &http.Client{
+				Transport: &http.Transport{
+					Proxy: http.ProxyURL(proxyURL),
+				},
+			}
+			log.Printf("🔗 使用代理: %s", cfg.Proxy)
+		}
+	}
 
 	return &Engine{
 		config:  cfg,

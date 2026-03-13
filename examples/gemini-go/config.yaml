@@ -8,6 +8,9 @@ auth:
   username: ""
   password: ""
 
+# HTTP 代理（可选，用于无法直连 API 时，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080）
+# proxy: "http://127.0.0.1:7890"
+
 # Gemini API 配置
 gemini:
   # API 密钥（也可通过环境变量 GEMINI_API_KEY 设置，环境变量优先）

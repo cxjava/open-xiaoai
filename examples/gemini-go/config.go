@@ -40,7 +40,8 @@ type InterruptConfig struct {
 type AppConfig struct {
 	Server    ServerConfig    `yaml:"server"`
 	Auth      AuthConfig      `yaml:"auth"`
-	Gemini    GeminiConfig    `yaml:"gemini"`
+	Proxy     string         `yaml:"proxy"` // HTTP/SOCKS5 代理，如 http://127.0.0.1:7890
+	Gemini    GeminiConfig   `yaml:"gemini"`
 	Interrupt InterruptConfig `yaml:"interrupt"`
 	Greeting  string          `yaml:"greeting"`
 }

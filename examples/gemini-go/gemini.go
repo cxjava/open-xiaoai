@@ -4,6 +4,8 @@ import (
 	"context"
 	"io"
 	"log"
+	"net/http"
+	"net/url"
 
 	"google.golang.org/genai"
 )
@@ -20,10 +22,22 @@ func startGemini(ctx context.Context, cfg *AppConfig, cb GeminiCallbacks) error 
 		log.Fatal("❌ 请设置 GEMINI_API_KEY 环境变量或在 config.yaml 中配置 gemini.api_key")
 	}
 
-	client, err := genai.NewClient(ctx, &genai.ClientConfig{
+	clientCfg := &genai.ClientConfig{
 		APIKey:  apiKey,
 		Backend: genai.BackendGeminiAPI,
-	})
+	}
+	if cfg.Proxy != "" {
+		proxyURL, err := url.Parse(cfg.Proxy)
+		if err != nil {
+			log.Printf("⚠️ 无效的代理地址 %q: %v，将不使用代理", cfg.Proxy, err)
+		} else {
+			transport := http.DefaultTransport.(*http.Transport).Clone()
+			transport.Proxy = http.ProxyURL(proxyURL)
+			clientCfg.HTTPClient = &http.Client{Transport: transport}
+			log.Printf("🔗 使用代理: %s", cfg.Proxy)
+		}
+	}
+	client, err := genai.NewClient(ctx, clientCfg)
 	if err != nil {
 		return err
 	}

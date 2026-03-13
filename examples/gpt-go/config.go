@@ -48,6 +48,7 @@ type CustomReply struct {
 type AppConfig struct {
 	Server         ServerConfig   `yaml:"server"`
 	Auth           AuthConfig     `yaml:"auth"`
+	Proxy          string         `yaml:"proxy"` // HTTP/SOCKS5 代理，如 http://127.0.0.1:7890
 	OpenAI         OpenAIConfig   `yaml:"openai"`
 	Prompt         PromptConfig   `yaml:"prompt"`
 	Context        ContextConfig  `yaml:"context"`
