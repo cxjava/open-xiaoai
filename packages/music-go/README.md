@@ -1,6 +1,6 @@
 # music-go
 
-可复用的本地音乐播放模块，供 gpt-go、gemini-go 等集成。纯 Go 实现，无 ffmpeg 依赖，通过监听客户端上报的 `playing` 事件实现自动切歌。
+可复用的本地音乐播放模块，供 chat-go、gemini-go 等集成。纯 Go 实现，无 ffmpeg 依赖，通过监听客户端上报的 `playing` 事件实现自动切歌。
 
 ## 功能
 
@@ -146,7 +146,7 @@ music:
 
 ## 集成方式
 
-在父模块（gpt-go / gemini-go）中：
+在父模块（chat-go / gemini-go）中：
 
 ```go
 // 1. 在 config 结构体中增加 Music 字段

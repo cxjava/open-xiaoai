@@ -31,7 +31,8 @@ type InterruptConfig struct {
 	KwsInterrupt bool     `yaml:"kws_interrupt"` // 唤醒词(kws事件)也触发打断
 }
 
-type OpenAIConfig struct {
+// LLMConfig LLM API 配置，支持 OpenAI / Claude(OpenRouter) / DeepSeek 等
+type LLMConfig struct {
 	BaseURL string `yaml:"base_url"`
 	APIKey  string `yaml:"api_key"`
 	Model   string `yaml:"model"`
@@ -52,17 +53,22 @@ type CustomReply struct {
 }
 
 type AppConfig struct {
-	Server         ServerConfig   `yaml:"server"`
-	Auth           AuthConfig     `yaml:"auth"`
-	Proxy          string         `yaml:"proxy"` // HTTP/SOCKS5 代理，如 http://127.0.0.1:7890
-	OpenAI         OpenAIConfig   `yaml:"openai"`
-	Prompt         PromptConfig   `yaml:"prompt"`
-	Context        ContextConfig  `yaml:"context"`
+	Server         ServerConfig    `yaml:"server"`
+	Auth           AuthConfig      `yaml:"auth"`
+	Proxy          string          `yaml:"proxy"` // HTTP/SOCKS5 代理，如 http://127.0.0.1:7890
+	LLM            LLMConfig       `yaml:"llm"`
+	Prompt         PromptConfig    `yaml:"prompt"`
+	Context        ContextConfig   `yaml:"context"`
 	Interrupt      InterruptConfig `yaml:"interrupt"`
-	CallAIKeywords []string       `yaml:"call_ai_keywords"`
-	CustomReplies  []CustomReply  `yaml:"custom_replies"`
-	Greeting       string         `yaml:"greeting"`
-	ErrorMessage   string         `yaml:"error_message"`
+	CallAIKeywords []string        `yaml:"call_ai_keywords"`
+	CustomReplies  []CustomReply   `yaml:"custom_replies"`
+	Greeting       string          `yaml:"greeting"`
+	ErrorMessage   string          `yaml:"error_message"`
+}
+
+// GetLLM 返回 LLM 配置
+func (c *AppConfig) GetLLM() LLMConfig {
+	return c.LLM
 }
 
 func loadConfig(path string) (*AppConfig, error) {
@@ -76,7 +82,7 @@ func loadConfig(path string) (*AppConfig, error) {
 			Host: "0.0.0.0",
 			Port: 4399,
 		},
-		OpenAI: OpenAIConfig{
+		LLM: LLMConfig{
 			BaseURL: "https://api.openai.com/v1",
 			Model:   "gpt-4.1-mini",
 		},

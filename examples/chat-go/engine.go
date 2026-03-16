@@ -33,8 +33,9 @@ type Engine struct {
 }
 
 func NewEngine(cfg *AppConfig, speaker *Speaker) *Engine {
-	clientCfg := openai.DefaultConfig(cfg.OpenAI.APIKey)
-	clientCfg.BaseURL = cfg.OpenAI.BaseURL
+	llm := cfg.GetLLM()
+	clientCfg := openai.DefaultConfig(llm.APIKey)
+	clientCfg.BaseURL = llm.BaseURL
 
 	if cfg.Proxy != "" {
 		proxyURL, err := url.Parse(cfg.Proxy)
@@ -221,7 +222,7 @@ func (e *Engine) streamAndPlay(ctx context.Context, userText string) (string, er
 	messages := e.buildMessages(userText)
 
 	stream, err := e.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
-		Model:    e.config.OpenAI.Model,
+		Model:    e.config.GetLLM().Model,
 		Messages: messages,
 		Stream:   true,
 	})

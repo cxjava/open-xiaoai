@@ -42,9 +42,9 @@ builds:
     goarch:
       - amd64
       - arm64
-  - id: gpt-go
-    dir: examples/gpt-go
-    binary: gpt-go
+  - id: chat-go
+    dir: examples/chat-go
+    binary: chat-go
     main: .
     env:
       - CGO_ENABLED=0
@@ -59,7 +59,7 @@ builds:
       - arm64
 
 upx:
-  - ids: [client-go, gemini-go, gpt-go]
+  - ids: [client-go, gemini-go, chat-go]
     enabled: true
     
 archives:
@@ -86,11 +86,11 @@ archives:
     format_overrides:
       - goos: windows
         formats: [zip]
-  - id: gpt-go
-    builds: [gpt-go]
+  - id: chat-go
+    builds: [chat-go]
     formats: [tar.gz]
     name_template: >-
-      gpt-go_
+      chat-go_
       {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "386" }}i386

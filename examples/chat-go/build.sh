@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
 OUTPUT_DIR="$SCRIPT_DIR/dist"
-BINARY_NAME="gpt-go"
+BINARY_NAME="chat-go"
 
 mkdir -p "$OUTPUT_DIR"
 

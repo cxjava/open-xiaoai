@@ -18,9 +18,9 @@ func main() {
 	speaker := NewSpeaker()
 	engine := NewEngine(cfg, speaker)
 
-	log.Println("✅ GPT-Go 已启动")
+	log.Println("✅ Chat-Go 已启动")
 	log.Printf("   监听: %s:%d", cfg.Server.Host, cfg.Server.Port)
-	log.Printf("   模型: %s", cfg.OpenAI.Model)
+	log.Printf("   模型: %s", cfg.GetLLM().Model)
 	log.Printf("   打断: keywords=%v match=%s kws=%v", cfg.Interrupt.Keywords, cfg.Interrupt.MatchMode, cfg.Interrupt.KwsInterrupt)
 
 	ctx := context.Background()

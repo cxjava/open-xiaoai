@@ -31,7 +31,7 @@ mkdir /data/open-xiaoai
 ```
 
 > [!IMPORTANT]
-> 先运行 Server 端（如 gpt-go、gemini-go）获取地址，再启动 Client。不要连接来路不明的 server 🚨
+> 先运行 Server 端（如 chat-go、gemini-go）获取地址，再启动 Client。不要连接来路不明的 server 🚨
 
 ## 编译
 
@@ -95,7 +95,7 @@ chmod +x /data/open-xiaoai/client
 
 ## 认证
 
-若服务端（gpt-go / gemini-go）启用了认证（`auth.users` 非空），客户端需在连接 URL 中携带有效凭据：
+若服务端（chat-go / gemini-go）启用了认证（`auth.users` 非空），客户端需在连接 URL 中携带有效凭据：
 
 ```
 ws://server地址:4399?username=alice&password=password123

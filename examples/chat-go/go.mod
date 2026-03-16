@@ -1,4 +1,4 @@
-module github.com/idootop/open-xiaoai/examples/gpt-go
+module github.com/idootop/open-xiaoai/examples/chat-go
 
 go 1.25.8
 

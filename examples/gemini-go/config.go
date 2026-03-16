@@ -36,7 +36,7 @@ type GeminiConfig struct {
 	Speech             GeminiSpeechConfig `yaml:"speech"`
 }
 
-// InterruptConfig 打断配置：仅当关键词或唤醒词匹配时才打断（与 gpt-go 统一）
+// InterruptConfig 打断配置：仅当关键词或唤醒词匹配时才打断（与 chat-go 统一）
 type InterruptConfig struct {
 	Keywords     []string `yaml:"keywords"`      // 关键词列表
 	MatchMode    string   `yaml:"match_mode"`    // exact, prefix, contains

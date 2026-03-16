@@ -1,12 +1,12 @@
 # Open-XiaoAI x Gemini Live API (Go)
 
-小爱音箱接入 [Gemini Live API](https://ai.google.dev/gemini-api/docs/live) 的 Go 实现，是 [gemini](../gemini/README.md) 的完全重写版本。
+**实时音频（Gemini Live）**：小爱音箱接入 [Gemini Live API](https://ai.google.dev/gemini-api/docs/live) 的 Go 实现，是 [gemini](../gemini/README.md) 的完全重写版本。
 
-支持端到端语音流：麦克风 PCM → Gemini Live API → 音频 PCM 回放。Gemini 自带 VAD，支持连续对话。
+端到端语音流：麦克风 PCM → Gemini Live API → 音频 PCM 回放。Gemini 自带 VAD，支持连续对话，无需 TTS。
 
 ## 功能
 
-- **实时语音对话**：16kHz PCM 输入 → Gemini 推理 → 24kHz PCM 输出
+- **实时音频（Gemini Live）**：16kHz PCM 输入 → Gemini 推理 → 24kHz PCM 输出，无需 TTS
 - **自动 VAD**：由 Gemini 服务端处理，无需本地模型
 - **回声抑制**：AI 说话时不转发麦克风输入，避免回声
 - **关键词/唤醒词打断**：仅当配置的关键词或唤醒词匹配时才触发打断
@@ -85,4 +85,4 @@ vim config.yaml
 
 ## 注意事项
 
-- **打断机制**：仅当 instruction 匹配 `interrupt.keywords` 或 kws 事件且 `kws_interrupt=true` 时触发，与 gpt-go 配置统一。
+- **打断机制**：仅当 instruction 匹配 `interrupt.keywords` 或 kws 事件且 `kws_interrupt=true` 时触发，与 chat-go 配置统一。

@@ -15,15 +15,18 @@ auth:
 # HTTP 代理（可选，用于无法直连 API 时，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080）
 # proxy: "http://127.0.0.1:7890"
 
-# OpenAI API 配置（支持兼容 OpenAI 接口的第三方服务，如 DeepSeek）
-openai:
+# LLM API 配置（支持 OpenAI 兼容接口，如 OpenAI / Claude / DeepSeek / 通义千问）
+# Claude 可通过 OpenRouter 使用：base_url: https://openrouter.ai/api/v1，model: anthropic/claude-3.5-sonnet
+llm:
   # 接口地址，以 /v1 结尾
   base_url: "https://api.openai.com/v1"
+  # base_url: "https://openrouter.ai/api/v1"   # Claude 等（需 OpenRouter API Key）
   # base_url: "https://api.deepseek.com/v1"
   # API 密钥
   api_key: "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-  # 模型名称  
+  # 模型名称
   model: "gpt-4.1-mini"
+  # model: "anthropic/claude-3.5-sonnet"       # 通过 OpenRouter
   # model: "deepseek-chat"
 
 # 系统提示词

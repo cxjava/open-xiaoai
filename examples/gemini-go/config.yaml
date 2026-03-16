@@ -27,7 +27,7 @@ gemini:
     language: "cmn-CN"
     voice: "Leda"
 
-# 打断配置：仅当关键词或唤醒词匹配时才打断（与 gpt-go 统一）
+# 打断配置：仅当关键词或唤醒词匹配时才打断（与 chat-go 统一）
 interrupt:
   keywords:
     - "召唤小智"

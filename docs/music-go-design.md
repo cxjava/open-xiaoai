@@ -1,6 +1,6 @@
 # music-go 模块设计方案
 
-> 可复用的本地音乐播放模块，供 gpt-go、gemini-go 等集成。纯 Go 实现，无 ffmpeg 依赖，通过监听客户端上报的 `playing` 事件实现自动切歌。
+> 可复用的本地音乐播放模块，供 chat-go、gemini-go 等集成。纯 Go 实现，无 ffmpeg 依赖，通过监听客户端上报的 `playing` 事件实现自动切歌。
 
 ---
 
@@ -23,7 +23,7 @@
 ### 1.1 目标
 
 - **独立模块**：`packages/music-go` 作为可复用包
-- **配置驱动**：在 gpt-go/gemini-go 的 config 中增加 `music` 配置块即可启用
+- **配置驱动**：在 chat-go/gemini-go 的 config 中增加 `music` 配置块即可启用
 - **静态 HTTP 服务**：将本地音乐目录映射为局域网 URL，供音箱拉取
 - **自动切歌**：基于客户端上报的 `playing` 事件，监听 `Playing → Idle` 触发下一首
 
@@ -359,7 +359,7 @@ playing 事件 status == "Paused":
 | 4 | playing 事件、Idle 自动切歌 |
 | 5 | 打断白名单、延迟恢复 |
 | 6 | 定时刷新循环 |
-| 7 | gpt-go / gemini-go 集成与联调 |
+| 7 | chat-go / gemini-go 集成与联调 |
 
 ---
 
@@ -374,7 +374,7 @@ require (
 )
 ```
 
-gpt-go/gemini-go 增加 `require music-go` 及 `replace` 指向 `../../packages/music-go`。
+chat-go/gemini-go 增加 `require music-go` 及 `replace` 指向 `../../packages/music-go`。
 
 ---
 

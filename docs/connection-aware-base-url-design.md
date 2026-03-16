@@ -6,7 +6,7 @@
 
 ## 一、OnConnectionHost 为何「看起来没作用」？
 
-**当前 gemini-go / gpt-go 未集成 music-go**，因此 `startServer` 传入的 `OnConnectionHost` 为 `nil`，回调不会被调用。
+**当前 gemini-go / chat-go 未集成 music-go**，因此 `startServer` 传入的 `OnConnectionHost` 为 `nil`，回调不会被调用。
 
 **作用时机**：只有在集成 music-go 时，传入非 nil 回调，才会生效：
 
@@ -71,7 +71,7 @@ CreateFileURL 使用该 base_url 生成 URL
 | 组件 | 改动 |
 |------|------|
 | **music-go** | 新增 `SetBaseURLForConnection(host string)`，按连接动态设置 base_url |
-| **gemini-go / gpt-go** | `handleConnection` 传入 `r`，在 `initConnection` 中根据 `r.Host` 计算并设置 base_url |
+| **gemini-go / chat-go** | `handleConnection` 传入 `r`，在 `initConnection` 中根据 `r.Host` 计算并设置 base_url |
 | **client-go** | 支持多地址连接：先试 LAN，失败再试 Tailscale |
 
 ---
@@ -99,7 +99,7 @@ func (m *Module) SetBaseURLForConnection(host string)
 - 已有 `SetBaseURL`，可直接复用
 - `SetBaseURLForConnection` 内部调用 `fileSrv.SetBaseURL("http://" + host + ":port")`
 
-### 5.2 gemini-go / gpt-go
+### 5.2 gemini-go / chat-go
 
 **handleConnection 签名**：
 
@@ -191,12 +191,12 @@ for each url in server_urls:
 | 阶段 | 内容 |
 |------|------|
 | 1 | music-go: `SetBaseURLForConnection(host string)` ✅ |
-| 2 | gemini-go / gpt-go: 传入 `r`，在 initConnection 中设置 base_url ✅ |
+| 2 | gemini-go / chat-go: 传入 `r`，在 initConnection 中设置 base_url ✅ |
 | 3 | client-go: 支持多 server URL 按序尝试 ✅ |
 
 ## 八、集成 music 时
 
-当 gemini-go 或 gpt-go 集成 music-go 时，在 main 中传入回调即可：
+当 gemini-go 或 chat-go 集成 music-go 时，在 main 中传入回调即可：
 
 ```go
 // gemini-go main.go

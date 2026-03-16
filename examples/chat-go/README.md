@@ -1,14 +1,14 @@
-# Open-XiaoAI x GPT (Go)
+# Open-XiaoAI x Chat (Go)
 
-小爱音箱接入 OpenAI 兼容 API 的 Go 实现，是 [migpt](../migpt/README.md) 的完全重写版本。
+**文本流式 + TTS**：小爱音箱接入 OpenAI 兼容 API 的 Go 实现，是 [migpt](../migpt/README.md) 的完全重写版本。
 
-相比原版 MiGPT，该版本可完美打断小爱回复，响应延迟更低。支持 DeepSeek、通义千问等所有兼容 OpenAI 接口的服务。
+相比原版 MiGPT，该版本可完美打断小爱回复，响应延迟更低。支持 **GPT、Claude、DeepSeek、通义千问** 等（文本流式 + TTS 播放）。与 gemini-go 的实时音频不同，chat-go 为文本流式 + TTS 模式。Claude 可通过 [OpenRouter](https://openrouter.ai) 使用。
 
 ## 功能
 
 - **关键词触发**：仅回答以「请」「你」等关键词开头的消息
 - **关键词/唤醒词打断**：仅当配置的关键词或唤醒词匹配时才打断 AI 回复
-- **流式回复**：OpenAI Chat Completions 流式输出，逐句 TTS 播放
+- **文本流式 + TTS**：Chat Completions 流式输出，逐句 TTS 播放
 - **对话历史**：可配置的上下文长度
 - **自定义回复**：通过配置文件设置固定回复（文字/音频链接）
 - **中断机制**：新消息到来时自动取消正在进行的 AI 回复
@@ -21,17 +21,23 @@
 ### 1. 编辑配置
 
 ```shell
-cd examples/gpt-go
+cd examples/chat-go
 vim config.yaml
 ```
 
-修改 `openai` 配置：
+修改 `llm` 配置：
 
 ```yaml
-openai:
-  base_url: "https://api.openai.com/v1"   # 或 https://api.deepseek.com/v1
+llm:
+  base_url: "https://api.openai.com/v1"   # 或 OpenRouter / DeepSeek 等
   api_key: "sk-xxxxxxxxxxxxxxxx"
   model: "gpt-4.1-mini"
+
+# Claude 示例（通过 OpenRouter）：
+# llm:
+#   base_url: "https://openrouter.ai/api/v1"
+#   api_key: "sk-or-xxx"   # OpenRouter API Key
+#   model: "anthropic/claude-3.5-sonnet"
 ```
 
 ### 2. 构建运行
@@ -41,10 +47,10 @@ openai:
 bash build.sh
 
 # 运行（默认读取 config.yaml）
-./dist/gpt-go
+./dist/chat-go
 
 # 指定配置文件
-./dist/gpt-go -config /path/to/config.yaml
+./dist/chat-go -config /path/to/config.yaml
 ```
 
 ### 3. 连接音箱
@@ -56,9 +62,9 @@ bash build.sh
 | 配置项 | 说明 |
 |--------|------|
 | `server.host` / `server.port` | 服务端监听地址和端口 |
-| `openai.base_url` | API 地址，支持 OpenAI / DeepSeek / 通义千问等 |
-| `openai.api_key` | API 密钥 |
-| `openai.model` | 模型名称 |
+| `llm.base_url` | API 地址，支持 OpenAI / Claude(OpenRouter) / DeepSeek / 通义千问等 |
+| `llm.api_key` | API 密钥 |
+| `llm.model` | 模型名称 |
 | `prompt.system` | 系统提示词 |
 | `context.history_max_length` | 对话历史条数（0=关闭） |
 | `interrupt.keywords` | 打断触发的关键词（空则用 call_ai_keywords） |
@@ -86,7 +92,7 @@ custom_replies:
 
 ## 与 migpt 对比
 
-| 维度 | migpt (Node.js + Rust) | gpt-go |
+| 维度 | migpt (Node.js + Rust) | chat-go |
 |------|------------------------|--------|
 | 构建 | Node.js 22 + pnpm + Rust + Neon | `go build` |
 | 部署 | Docker 或 Node 环境 | 单二进制 |
