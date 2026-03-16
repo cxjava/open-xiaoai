@@ -18,15 +18,13 @@
 # 创建目录
 mkdir /data/open-xiaoai
 
-# 设置 server 地址（替换成你的 server 地址）
-echo 'ws://192.168.31.227:4399' > /data/open-xiaoai/server.txt
-
-# 若服务端启用了认证，需配置 config.yaml 中的 auth.username 和 auth.password
-
-# 运行（不提供 -config 则跳过认证）
+# 运行（替换成你的 server 地址）
 /data/open-xiaoai/client ws://你的server地址:4399
-# 若服务端启用认证，需提供配置文件：
-/data/open-xiaoai/client -config /data/open-xiaoai/config.yaml ws://你的server地址:4399
+
+# 若服务端启用了认证，在 URL 中携带用户名和密码：
+/data/open-xiaoai/client "ws://你的server地址:4399?username=admin&password=123"
+# 或使用简写参数：
+/data/open-xiaoai/client "ws://你的server地址:4399?u=admin&p=123"
 ```
 
 > [!IMPORTANT]
@@ -68,8 +66,8 @@ dd if=dist/open-xiaoai-client-arm7 \
 
 # 在音箱上授权并运行
 chmod +x /data/open-xiaoai/client
-# 若服务端启用认证，将 config.yaml 放到同目录并配置 auth
-/data/open-xiaoai/client -config /data/open-xiaoai/config.yaml ws://你的server地址:4399
+/data/open-xiaoai/client ws://你的server地址:4399
+# 若服务端启用认证，在 URL 中携带 ?username=admin&password=123 或 ?u=admin&p=123
 ```
 
 ## 与 client-rust 对比
@@ -83,15 +81,19 @@ chmod +x /data/open-xiaoai/client
 
 ## 认证
 
-若服务端（gpt-go / gemini-go）在 config 中配置了 `auth.username` 和 `auth.password`，客户端需在 `config.yaml` 中配置相同凭据：
+若服务端（gpt-go / gemini-go）在 config 中配置了 `auth.username` 和 `auth.password`，客户端需在连接 URL 中携带相同凭据：
 
-```yaml
-auth:
-  username: "alice"
-  password: "password123"
+```
+ws://server地址:4399?username=alice&password=password123
 ```
 
-配置为空则跳过认证。
+或使用简写参数 `u` / `p`：
+
+```
+ws://server地址:4399?u=alice&p=password123
+```
+
+不携带认证参数则跳过认证。
 
 ## 注意事项
 

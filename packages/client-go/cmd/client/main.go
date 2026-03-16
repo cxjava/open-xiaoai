@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -40,11 +41,11 @@ func NewAppClient() *AppClient {
 	}
 }
 
-func (c *AppClient) connectWS(ctx context.Context, serverURL string, cfg *ClientConfig) (*websocket.Conn, error) {
+func (c *AppClient) connectWS(ctx context.Context, serverURL string, username, password string) (*websocket.Conn, error) {
 	opts := &websocket.DialOptions{}
-	if cfg != nil && cfg.Auth.Username != "" && cfg.Auth.Password != "" {
+	if username != "" && password != "" {
 		opts.HTTPHeader = http.Header{
-			"Authorization": []string{basicAuthHeader(cfg.Auth.Username, cfg.Auth.Password)},
+			"Authorization": []string{basicAuthHeader(username, password)},
 		}
 	}
 	conn, _, err := websocket.Dial(ctx, serverURL, opts)
@@ -92,32 +93,41 @@ func (c *AppClient) dispose() {
 	c.kwsMonitor.Stop()
 }
 
+// parseAuthFromURL 从 URL 查询参数解析认证信息，支持 username/password 或 u/p
+func parseAuthFromURL(serverURL string) (username, password string) {
+	u, err := url.Parse(serverURL)
+	if err != nil {
+		return "", ""
+	}
+	q := u.Query()
+	username = q.Get("username")
+	if username == "" {
+		username = q.Get("u")
+	}
+	password = q.Get("password")
+	if password == "" {
+		password = q.Get("p")
+	}
+	return username, password
+}
+
 func (c *AppClient) run() {
-	configPath := flag.String("config", "", "配置文件路径（不提供则跳过认证）")
 	flag.Parse()
 
 	if flag.NArg() < 1 {
 		log.Fatal("❌ 请输入服务器地址，例如: ./client ws://192.168.31.227:4399")
 	}
 	serverURL := flag.Arg(0)
-
-	var cfg *ClientConfig
-	if *configPath != "" {
-		var err error
-		cfg, err = loadClientConfig(*configPath)
-		if err != nil {
-			log.Fatalf("❌ 加载配置失败: %v", err)
-		}
-		if cfg.Auth.Username != "" && cfg.Auth.Password != "" {
-			log.Println("🔐 已启用认证")
-		}
+	username, password := parseAuthFromURL(serverURL)
+	if username != "" && password != "" {
+		log.Println("🔐 已启用认证（从 URL 解析）")
 	}
 
 	log.Println("✅ 已启动")
 
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		conn, err := c.connectWS(ctx, serverURL, cfg)
+		conn, err := c.connectWS(ctx, serverURL, username, password)
 		cancel()
 
 		if err != nil {
