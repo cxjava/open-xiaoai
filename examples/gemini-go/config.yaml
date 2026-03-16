@@ -37,3 +37,9 @@ interrupt:
 
 # 连接成功后播放的提示语
 greeting: "已连接"
+
+# 本地音乐模块（可选）
+# music:
+#   enabled: true
+#   dirs:
+#     - /path/to/music

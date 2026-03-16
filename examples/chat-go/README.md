@@ -76,9 +76,18 @@ bash build.sh
 | `error_message` | 出错时的提示语 |
 | `custom_replies` | 固定回复规则（match + text/url） |
 
-## 连接感知 base_url（music 集成时）
+## 本地音乐
 
-集成 [music-go](../../packages/music-go/README.md) 时，需传入 `OnConnectionHost` 回调，使音乐 URL 根据客户端连接方式（LAN 或 Tailscale）自动选择 host。当前未集成 music 时传入 `nil` 即可。详见 [connection-aware-base-url-design](../../docs/connection-aware-base-url-design.md)。
+已集成 [music-go](../../packages/music-go/README.md)。在 `config.yaml` 中启用：
+
+```yaml
+music:
+  enabled: true
+  dirs:
+    - /path/to/music
+```
+
+支持「播放许嵩」「随便听听」「停止播放」等语音指令。连接感知 base_url 已启用，音乐 URL 会根据客户端连接方式（LAN 或 Tailscale）自动选择 host。详见 [connection-aware-base-url-design](../../docs/connection-aware-base-url-design.md)。
 
 ## 自定义回复示例
 

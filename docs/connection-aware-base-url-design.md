@@ -6,9 +6,7 @@
 
 ## 一、OnConnectionHost 为何「看起来没作用」？
 
-**当前 gemini-go / chat-go 未集成 music-go**，因此 `startServer` 传入的 `OnConnectionHost` 为 `nil`，回调不会被调用。
-
-**作用时机**：只有在集成 music-go 时，传入非 nil 回调，才会生效：
+**gemini-go / chat-go 已集成 music-go**。当 `music.enabled: true` 时，`startServer` 传入非 nil 的 `OnConnectionHost` 回调，每次连接建立时会调用：
 
 ```go
 onConnectionHost := func(host string) {
@@ -21,7 +19,7 @@ startServer(ctx, cfg, onConnectionHost)
 
 此时，每次连接建立时，会用 `r.Host` 提取 host 并调用 `musicModule.SetBaseURLForConnection(host)`，音乐 URL 才会根据连接方式（LAN / Tailscale）自动选择 host。
 
-**总结**：`OnConnectionHost` 是预留接口，供集成 music 时使用；未集成时传 `nil` 即可。
+**总结**：当 `music.enabled: true` 时，回调会设置音乐 base_url；未启用音乐时回调内 `musicModule` 为 nil，调用无副作用。
 
 ---
 

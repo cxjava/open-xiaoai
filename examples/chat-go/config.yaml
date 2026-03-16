@@ -64,3 +64,9 @@ custom_replies:
     text: "你好，很高兴认识你！"
   - match: "测试播放音乐"
     url: "https://example.com/hello.mp3"
+
+# 本地音乐模块（可选）
+# music:
+#   enabled: true
+#   dirs:
+#     - /path/to/music

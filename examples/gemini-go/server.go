@@ -17,6 +17,7 @@ import (
 	"github.com/idootop/open-xiaoai/packages/client-go/services/audio"
 	"github.com/idootop/open-xiaoai/packages/client-go/services/connect"
 	"github.com/idootop/open-xiaoai/packages/client-go/utils"
+	"github.com/idootop/open-xiaoai/packages/music-go"
 )
 
 func parseBasicAuth(r *http.Request) (username, password string, ok bool) {
@@ -90,7 +91,7 @@ var onKwsInterrupt func()
 // OnConnectionHost 连接建立时回调，传入客户端使用的 host（来自 r.Host），用于设置音乐 base_url 等
 type OnConnectionHost func(host string)
 
-func startServer(ctx context.Context, cfg *AppConfig, onConnectionHost OnConnectionHost) error {
+func startServer(ctx context.Context, cfg *AppConfig, onConnectionHost OnConnectionHost, musicModule *music.Module) error {
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -119,7 +120,7 @@ func startServer(ctx context.Context, cfg *AppConfig, onConnectionHost OnConnect
 			log.Printf("❌ WebSocket accept: %v", err)
 			return
 		}
-		handleConnection(conn, r, cfg, onConnectionHost)
+		handleConnection(conn, r, cfg, onConnectionHost, musicModule)
 	})
 
 	server := &http.Server{Handler: mux}
@@ -131,9 +132,9 @@ func startServer(ctx context.Context, cfg *AppConfig, onConnectionHost OnConnect
 	return server.Serve(listener)
 }
 
-func handleConnection(conn *websocket.Conn, r *http.Request, cfg *AppConfig, onConnectionHost OnConnectionHost) {
+func handleConnection(conn *websocket.Conn, r *http.Request, cfg *AppConfig, onConnectionHost OnConnectionHost, musicModule *music.Module) {
 	log.Printf("✅ 已连接: %s", r.RemoteAddr)
-	initConnection(conn, r, cfg, onConnectionHost)
+	initConnection(conn, r, cfg, onConnectionHost, musicModule)
 
 	if err := connect.GetMessageManager().ProcessMessages(); err != nil {
 		log.Printf("❌ 消息处理异常: %v", err)
@@ -143,7 +144,7 @@ func handleConnection(conn *websocket.Conn, r *http.Request, cfg *AppConfig, onC
 	log.Printf("❌ 已断开连接: %s", r.RemoteAddr)
 }
 
-func initConnection(conn *websocket.Conn, r *http.Request, cfg *AppConfig, onConnectionHost OnConnectionHost) {
+func initConnection(conn *websocket.Conn, r *http.Request, cfg *AppConfig, onConnectionHost OnConnectionHost, musicModule *music.Module) {
 	connect.GetMessageManager().Init(conn)
 
 	// 连接感知 base_url：客户端用哪个 host 连上来，就用同一 host 拼音乐 URL（支持 LAN/Tailscale）
@@ -159,6 +160,10 @@ func initConnection(conn *websocket.Conn, r *http.Request, cfg *AppConfig, onCon
 
 	connect.GetHandlers().SetEventHandler(func(event connect.Event) error {
 		log.Printf("🔥 收到 Event: %s", event.Event)
+		// 音乐模块优先：播放/停止/刷新等指令由音乐处理，不交给 AI
+		if musicModule != nil && musicModule.OnEvent(event) {
+			return nil
+		}
 		if event.Event == "instruction" && onUserInterrupt != nil && event.Data != nil {
 			text := parseInstructionUserText(*event.Data)
 			if text != "" && cfg.ShouldInterrupt(text) {

@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/idootop/open-xiaoai/packages/music-go"
 	"gopkg.in/yaml.v3"
 )
 
@@ -53,8 +54,8 @@ type CustomReply struct {
 }
 
 type AppConfig struct {
-	Server         ServerConfig    `yaml:"server"`
-	Auth           AuthConfig      `yaml:"auth"`
+	Server         ServerConfig     `yaml:"server"`
+	Auth           AuthConfig       `yaml:"auth"`
 	Proxy          string          `yaml:"proxy"` // HTTP/SOCKS5 代理，如 http://127.0.0.1:7890
 	LLM            LLMConfig       `yaml:"llm"`
 	Prompt         PromptConfig    `yaml:"prompt"`
@@ -64,6 +65,7 @@ type AppConfig struct {
 	CustomReplies  []CustomReply   `yaml:"custom_replies"`
 	Greeting       string          `yaml:"greeting"`
 	ErrorMessage   string          `yaml:"error_message"`
+	Music          music.MusicConfig `yaml:"music"`
 }
 
 // GetLLM 返回 LLM 配置

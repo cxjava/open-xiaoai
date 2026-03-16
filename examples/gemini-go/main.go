@@ -10,6 +10,7 @@ import (
 
 	"github.com/idootop/open-xiaoai/packages/client-go/services/audio"
 	"github.com/idootop/open-xiaoai/packages/client-go/services/connect"
+	"github.com/idootop/open-xiaoai/packages/music-go"
 )
 
 // Echo suppression: don't forward mic audio to Gemini while AI is speaking.
@@ -78,13 +79,28 @@ func main() {
 		needRestartPlay.Store(true)
 	}
 
+	var musicModule *music.Module
+	if cfg.Music.Enabled {
+		musicModule = music.New(&cfg.Music)
+		if err := musicModule.Start(ctx); err != nil {
+			log.Fatalf("❌ 音乐模块启动失败: %v", err)
+		}
+		defer musicModule.Stop()
+	}
+
+	onConnectionHost := func(host string) {
+		if musicModule != nil {
+			musicModule.SetBaseURLForConnection(host)
+		}
+	}
+
 	var wg sync.WaitGroup
 
 	// Start WebSocket server (blocks until speaker connects, then processes messages)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := startServer(ctx, cfg, nil); err != nil {
+		if err := startServer(ctx, cfg, onConnectionHost, musicModule); err != nil {
 			log.Printf("❌ server error: %v", err)
 		}
 	}()
@@ -110,6 +126,9 @@ func main() {
 
 	log.Printf("✅ Gemini-Go 已启动: %s:%d", cfg.Server.Host, cfg.Server.Port)
 	log.Printf("   打断: keywords=%v match=%s kws=%v", cfg.Interrupt.Keywords, cfg.Interrupt.MatchMode, cfg.Interrupt.KwsInterrupt)
+	if cfg.Music.Enabled {
+		log.Printf("   音乐: 已启用")
+	}
 	wg.Wait()
 }
 
