@@ -45,6 +45,8 @@ vim config.yaml
 
 确保小爱音箱的 client 已连接到本机（默认 `ws://你的IP:4399`，可在 config 中修改端口）。
 
+**与 chat-go 切换**：若需语音切换 gemini-go 与 chat-go，将 chat-go 配置为 4400 端口，client 使用 `-switch` 模式：`./client -switch ws://IP:4399 ws://IP:4400`。说「小智模式」或「对话模式」即可切换。
+
 ## 数据流
 
 ```

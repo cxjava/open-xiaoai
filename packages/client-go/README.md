@@ -24,6 +24,9 @@ mkdir /data/open-xiaoai
 # 多地址：按顺序尝试，支持 LAN + Tailscale 等场景（在家用 LAN，带回老家用 Tailscale）
 /data/open-xiaoai/client ws://192.168.1.100:4399 ws://my-server:4399
 
+# 切换模式：gemini-go 与 chat-go 语音切换
+/data/open-xiaoai/client -switch ws://你的IP:4399 ws://你的IP:4400
+
 # 若服务端启用了认证，在 URL 中携带用户名和密码：
 /data/open-xiaoai/client "ws://你的server地址:4399?username=admin&password=123"
 # 或使用简写参数：
@@ -82,9 +85,13 @@ chmod +x /data/open-xiaoai/client
 | 依赖 | 7 个 crate | 2 个（websocket + uuid） |
 | 协议 | 完全一致 | 完全一致 |
 
-## 多地址连接（LAN + Tailscale）
+## 多地址：两种模式
 
-支持传入多个 server 地址，按顺序尝试连接，直到成功：
+多地址时需区分用途，通过 `-switch` 参数选择：
+
+### 远程连接模式（默认）：LAN + Tailscale 容错
+
+不传 `-switch` 时，多地址按顺序尝试，直到连接成功：
 
 ```shell
 # 先试 LAN，失败再试 Tailscale MagicDNS
@@ -92,6 +99,26 @@ chmod +x /data/open-xiaoai/client
 ```
 
 适用于：音箱在家连局域网，带回老家后通过 Tailscale 连接。Server 会根据客户端连接方式返回对应的音乐 URL，详见 [connection-aware-base-url-design](../../docs/connection-aware-base-url-design.md)。
+
+### 切换模式：gemini-go / chat-go 语音切换
+
+传 `-switch` 时，多地址用于不同 Server（如 gemini-go 与 chat-go），说切换词即可切换：
+
+```shell
+# gemini-go 默认 4399，chat-go 需配置为 4400
+./client -switch ws://你的IP:4399 ws://你的IP:4400
+```
+
+默认切换词：`小智模式`、`对话模式`。可自定义：
+
+```shell
+./client -switch -switch-keywords="小智,对话" ws://IP:4399 ws://IP:4400
+```
+
+| 模式 | 参数 | 多地址含义 |
+|------|------|------------|
+| 远程连接 | 无 `-switch` | 按顺序尝试，容错 |
+| 切换 | `-switch` | 轮询连接，说切换词即切换 |
 
 ## 认证
 

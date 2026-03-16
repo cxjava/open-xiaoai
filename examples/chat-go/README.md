@@ -51,6 +51,9 @@ bash build.sh
 
 # 指定配置文件
 ./dist/chat-go -config /path/to/config.yaml
+
+# 与 gemini-go 同时运行：将 chat-go 改为 4400 端口（config.yaml 中 server.port: 4400）
+# 音箱上 client 使用切换模式：./client -switch ws://IP:4399 ws://IP:4400
 ```
 
 ### 3. 连接音箱

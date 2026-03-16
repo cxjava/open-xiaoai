@@ -21,6 +21,11 @@ import (
 	"github.com/idootop/open-xiaoai/packages/client-go/utils"
 )
 
+var (
+	flagSwitch        = flag.Bool("switch", false, "切换模式：多地址用于 gemini-go/chat-go 语音切换，说切换词即切换 Server")
+	flagSwitchKeywords = flag.String("switch-keywords", "小智模式,对话模式", "切换模式下的触发词，逗号分隔")
+)
+
 func basicAuthHeader(username, password string) string {
 	credentials := username + ":" + password
 	encoded := base64.StdEncoding.EncodeToString([]byte(credentials))
@@ -31,6 +36,13 @@ type AppClient struct {
 	kwsMonitor         *monitor.KwsMonitor
 	instructionMonitor *monitor.InstructionMonitor
 	playingMonitor     *monitor.PlayingMonitor
+}
+
+// runConfig 运行配置，用于切换模式
+type runConfig struct {
+	switchMode      bool
+	switchKeywords  []string
+	switchRequested chan struct{}
 }
 
 func NewAppClient() *AppClient {
@@ -55,7 +67,7 @@ func (c *AppClient) connectWS(ctx context.Context, serverURL string, username, p
 	return conn, nil
 }
 
-func (c *AppClient) init(conn *websocket.Conn) {
+func (c *AppClient) init(conn *websocket.Conn, cfg *runConfig) {
 	mgr := connect.GetMessageManager()
 	mgr.Init(conn)
 
@@ -72,6 +84,20 @@ func (c *AppClient) init(conn *websocket.Conn) {
 	rpc.AddCommand("stop_recording", stopRecording)
 
 	c.instructionMonitor.Start(func(event monitor.FileMonitorEvent) {
+		if cfg != nil && cfg.switchMode && event.Type == "NewLine" && event.Line != "" {
+			text := parseInstructionText(event.Line)
+			for _, kw := range cfg.switchKeywords {
+				if strings.Contains(text, strings.TrimSpace(kw)) {
+					log.Printf("🔄 检测到切换词 %q，即将切换 Server", text)
+					select {
+					case cfg.switchRequested <- struct{}{}:
+					default:
+						// 已有一个待处理的切换请求
+					}
+					return // 不转发给 Server
+				}
+			}
+		}
 		mgr.SendEvent("instruction", event)
 	})
 
@@ -91,6 +117,34 @@ func (c *AppClient) dispose() {
 	c.instructionMonitor.Stop()
 	c.playingMonitor.Stop()
 	c.kwsMonitor.Stop()
+}
+
+// parseInstructionText 从 instruction.log 行中提取用户最终语音文本
+// Line 格式: {"header":{"namespace":"SpeechRecognizer","name":"RecognizeResult"},"payload":{"is_final":true,"results":[{"text":"..."}]}}
+func parseInstructionText(line string) string {
+	if line == "" {
+		return ""
+	}
+	var msg struct {
+		Header  struct{ Namespace, Name string } `json:"header"`
+		Payload struct {
+			IsFinal bool `json:"is_final"`
+			Results []struct {
+				Text string `json:"text"`
+			} `json:"results"`
+		} `json:"payload"`
+	}
+	if err := json.Unmarshal([]byte(line), &msg); err != nil {
+		return ""
+	}
+	if !strings.EqualFold(msg.Header.Namespace, "SpeechRecognizer") ||
+		!strings.EqualFold(msg.Header.Name, "RecognizeResult") {
+		return ""
+	}
+	if !msg.Payload.IsFinal || len(msg.Payload.Results) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(msg.Payload.Results[0].Text)
 }
 
 // parseAuthFromURL 从 URL 查询参数解析认证信息，支持 username/password 或 u/p
@@ -117,44 +171,112 @@ func (c *AppClient) run() {
 	if flag.NArg() < 1 {
 		log.Fatal("❌ 请输入服务器地址，例如: ./client ws://192.168.31.227:4399")
 	}
-	// 支持多地址：按顺序尝试，支持 LAN + Tailscale 等场景
 	serverURLs := flag.Args()
-	log.Printf("📡 服务器地址列表: %v", serverURLs)
+	switchMode := *flagSwitch
+	switchKeywords := parseSwitchKeywords(*flagSwitchKeywords)
+
+	if switchMode {
+		log.Printf("📡 切换模式：服务器列表 %v，切换词 %v", serverURLs, switchKeywords)
+	} else {
+		log.Printf("📡 远程连接模式：按顺序尝试 %v", serverURLs)
+	}
 	log.Println("✅ 已启动")
 
+	var currentIndex int
 	for {
 		var conn *websocket.Conn
 		var serverURL string
-		for _, u := range serverURLs {
+
+		if switchMode {
+			// 切换模式：连接 serverURLs[currentIndex]，轮询
+			u := serverURLs[currentIndex%len(serverURLs)]
 			username, password := parseAuthFromURL(u)
-			if username != "" && password != "" {
-				log.Println("🔐 已启用认证（从 URL 解析）")
-			}
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			wsConn, err := c.connectWS(ctx, u, username, password)
 			cancel()
-			if err == nil {
-				conn = wsConn
-				serverURL = u
-				break
+			if err != nil {
+				log.Printf("⚠️ 连接失败 %s: %v，1 秒后重试", u, err)
+				time.Sleep(1 * time.Second)
+				continue
 			}
-			log.Printf("⚠️ 连接失败 %s: %v，尝试下一个", u, err)
+			conn = wsConn
+			serverURL = u
+		} else {
+			// 远程连接模式：按顺序尝试，直到成功
+			for _, u := range serverURLs {
+				username, password := parseAuthFromURL(u)
+				if username != "" && password != "" {
+					log.Println("🔐 已启用认证（从 URL 解析）")
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				wsConn, err := c.connectWS(ctx, u, username, password)
+				cancel()
+				if err == nil {
+					conn = wsConn
+					serverURL = u
+					break
+				}
+				log.Printf("⚠️ 连接失败 %s: %v，尝试下一个", u, err)
+			}
 		}
+
 		if conn == nil {
 			time.Sleep(1 * time.Second)
 			continue
 		}
 		log.Printf("✅ 已连接: %s", serverURL)
 
-		c.init(conn)
+		var cfg *runConfig
+		if switchMode {
+			switchRequested := make(chan struct{}, 1)
+			cfg = &runConfig{
+				switchMode:      true,
+				switchKeywords:  switchKeywords,
+				switchRequested: switchRequested,
+			}
+			c.init(conn, cfg)
 
-		if err := connect.GetMessageManager().ProcessMessages(); err != nil {
-			log.Printf("❌ 消息处理异常: %v", err)
+			done := make(chan struct{})
+			go func() {
+				_ = connect.GetMessageManager().ProcessMessages()
+				close(done)
+			}()
+
+			select {
+			case <-done:
+				// 连接正常断开
+			case <-switchRequested:
+				// 用户说切换词，主动断开并切换
+				log.Println("🔄 正在切换 Server...")
+				c.dispose()
+				<-done
+				currentIndex++
+			}
+			c.dispose() // 切换模式下已在 case 中 dispose，此处对已停止的 monitor 再调一次无副作用
+		} else {
+			c.init(conn, nil)
+			if err := connect.GetMessageManager().ProcessMessages(); err != nil {
+				log.Printf("❌ 消息处理异常: %v", err)
+			}
+			c.dispose()
 		}
-
-		c.dispose()
 		log.Println("❌ 已断开连接")
 	}
+}
+
+func parseSwitchKeywords(s string) []string {
+	parts := strings.Split(s, ",")
+	var out []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	if len(out) == 0 {
+		return []string{"小智模式", "对话模式"}
+	}
+	return out
 }
 
 // --- RPC Handlers ---
