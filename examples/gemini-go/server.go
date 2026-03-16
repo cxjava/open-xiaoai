@@ -87,7 +87,10 @@ var onUserInterrupt func(userText string)
 // Main sets it to: stop playback, allow mic through (no text sent to Gemini).
 var onKwsInterrupt func()
 
-func startServer(ctx context.Context, cfg *AppConfig) error {
+// OnConnectionHost 连接建立时回调，传入客户端使用的 host（来自 r.Host），用于设置音乐 base_url 等
+type OnConnectionHost func(host string)
+
+func startServer(ctx context.Context, cfg *AppConfig, onConnectionHost OnConnectionHost) error {
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -116,7 +119,7 @@ func startServer(ctx context.Context, cfg *AppConfig) error {
 			log.Printf("❌ WebSocket accept: %v", err)
 			return
 		}
-		handleConnection(conn, r.RemoteAddr, cfg)
+		handleConnection(conn, r, cfg, onConnectionHost)
 	})
 
 	server := &http.Server{Handler: mux}
@@ -128,20 +131,31 @@ func startServer(ctx context.Context, cfg *AppConfig) error {
 	return server.Serve(listener)
 }
 
-func handleConnection(conn *websocket.Conn, addr string, cfg *AppConfig) {
-	log.Printf("✅ 已连接: %s", addr)
-	initConnection(conn, cfg)
+func handleConnection(conn *websocket.Conn, r *http.Request, cfg *AppConfig, onConnectionHost OnConnectionHost) {
+	log.Printf("✅ 已连接: %s", r.RemoteAddr)
+	initConnection(conn, r, cfg, onConnectionHost)
 
 	if err := connect.GetMessageManager().ProcessMessages(); err != nil {
 		log.Printf("❌ 消息处理异常: %v", err)
 	}
 
 	disposeConnection()
-	log.Printf("❌ 已断开连接: %s", addr)
+	log.Printf("❌ 已断开连接: %s", r.RemoteAddr)
 }
 
-func initConnection(conn *websocket.Conn, cfg *AppConfig) {
+func initConnection(conn *websocket.Conn, r *http.Request, cfg *AppConfig, onConnectionHost OnConnectionHost) {
 	connect.GetMessageManager().Init(conn)
+
+	// 连接感知 base_url：客户端用哪个 host 连上来，就用同一 host 拼音乐 URL（支持 LAN/Tailscale）
+	if onConnectionHost != nil && r.Host != "" {
+		host, _, err := net.SplitHostPort(r.Host)
+		if err != nil {
+			host = r.Host
+		}
+		if host != "" {
+			onConnectionHost(host)
+		}
+	}
 
 	connect.GetHandlers().SetEventHandler(func(event connect.Event) error {
 		log.Printf("🔥 收到 Event: %s", event.Event)

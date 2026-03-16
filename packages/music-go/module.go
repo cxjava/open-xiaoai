@@ -84,6 +84,21 @@ func (m *Module) Start(ctx context.Context) error {
 	return nil
 }
 
+// SetBaseURLForConnection 按当前连接设置 base_url，用于返回客户端可访问的音乐 URL
+// host 为客户端连接时使用的 host（来自 r.Host），如 "192.168.1.100" 或 "my-server"
+// 支持局域网与 Tailscale 等场景：客户端用哪个地址连上来，就用同一 host 拼音乐 URL
+func (m *Module) SetBaseURLForConnection(host string) {
+	if !m.config.Enabled || host == "" {
+		return
+	}
+	port := m.config.HTTP.Port
+	if port <= 0 {
+		port = 18080
+	}
+	baseURL := fmt.Sprintf("http://%s:%d", host, port)
+	m.fileSrv.SetBaseURL(baseURL)
+}
+
 // Stop 停止服务
 func (m *Module) Stop() error {
 	if !m.config.Enabled {

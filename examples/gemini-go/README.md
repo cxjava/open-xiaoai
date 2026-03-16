@@ -79,6 +79,10 @@ vim config.yaml
 | `interrupt.kws_interrupt` | 唤醒词是否触发打断 |
 | `greeting` | 连接成功后播放的提示语 |
 
+## 连接感知 base_url（music 集成时）
+
+集成 [music-go](../../packages/music-go/README.md) 时，需传入 `OnConnectionHost` 回调，使音乐 URL 根据客户端连接方式（LAN 或 Tailscale）自动选择 host。当前未集成 music 时传入 `nil` 即可。详见 [connection-aware-base-url-design](../../docs/connection-aware-base-url-design.md)。
+
 ## 注意事项
 
 - **打断机制**：仅当 instruction 匹配 `interrupt.keywords` 或 kws 事件且 `kws_interrupt=true` 时触发，与 gpt-go 配置统一。

@@ -174,6 +174,14 @@ connect.GetHandlers().SetEventHandler(func(event connect.Event) error {
     engine.OnEvent(event)
     return nil
 })
+
+// 4. 连接感知 base_url（支持 LAN + Tailscale）：传入 OnConnectionHost 回调
+onConnectionHost := func(host string) {
+    if musicModule != nil {
+        musicModule.SetBaseURLForConnection(host)
+    }
+}
+startServer(ctx, cfg, onConnectionHost)  // 或 startServer(ctx, engine, onConnectionHost)
 ```
 
 ---
@@ -182,6 +190,7 @@ connect.GetHandlers().SetEventHandler(func(event connect.Event) error {
 
 - **空**：通过 UDP 探测（`net.Dial("udp", "8.8.8.8:80")`）获取本机 LAN IP，音箱通过该地址拉取音频文件
 - **显式配置**：多网卡或复杂网络时，建议在配置中指定完整 URL，如 `http://192.168.1.100:18080`
+- **连接感知**：集成时传入 `OnConnectionHost` 回调，会根据客户端连接方式（LAN 或 Tailscale）自动使用对应 host 拼音乐 URL，详见 [connection-aware-base-url-design](../../docs/connection-aware-base-url-design.md)
 
 ---
 

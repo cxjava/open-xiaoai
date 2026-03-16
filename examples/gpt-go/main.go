@@ -24,7 +24,7 @@ func main() {
 	log.Printf("   打断: keywords=%v match=%s kws=%v", cfg.Interrupt.Keywords, cfg.Interrupt.MatchMode, cfg.Interrupt.KwsInterrupt)
 
 	ctx := context.Background()
-	if err := startServer(ctx, engine); err != nil {
+	if err := startServer(ctx, engine, nil); err != nil {
 		log.Fatalf("❌ server error: %v", err)
 	}
 }

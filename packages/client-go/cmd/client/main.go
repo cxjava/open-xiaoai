@@ -117,20 +117,30 @@ func (c *AppClient) run() {
 	if flag.NArg() < 1 {
 		log.Fatal("❌ 请输入服务器地址，例如: ./client ws://192.168.31.227:4399")
 	}
-	serverURL := flag.Arg(0)
-	username, password := parseAuthFromURL(serverURL)
-	if username != "" && password != "" {
-		log.Println("🔐 已启用认证（从 URL 解析）")
-	}
-
+	// 支持多地址：按顺序尝试，支持 LAN + Tailscale 等场景
+	serverURLs := flag.Args()
+	log.Printf("📡 服务器地址列表: %v", serverURLs)
 	log.Println("✅ 已启动")
 
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		conn, err := c.connectWS(ctx, serverURL, username, password)
-		cancel()
-
-		if err != nil {
+		var conn *websocket.Conn
+		var serverURL string
+		for _, u := range serverURLs {
+			username, password := parseAuthFromURL(u)
+			if username != "" && password != "" {
+				log.Println("🔐 已启用认证（从 URL 解析）")
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			wsConn, err := c.connectWS(ctx, u, username, password)
+			cancel()
+			if err == nil {
+				conn = wsConn
+				serverURL = u
+				break
+			}
+			log.Printf("⚠️ 连接失败 %s: %v，尝试下一个", u, err)
+		}
+		if conn == nil {
 			time.Sleep(1 * time.Second)
 			continue
 		}

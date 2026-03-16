@@ -21,6 +21,9 @@ mkdir /data/open-xiaoai
 # 运行（替换成你的 server 地址）
 /data/open-xiaoai/client ws://你的server地址:4399
 
+# 多地址：按顺序尝试，支持 LAN + Tailscale 等场景（在家用 LAN，带回老家用 Tailscale）
+/data/open-xiaoai/client ws://192.168.1.100:4399 ws://my-server:4399
+
 # 若服务端启用了认证，在 URL 中携带用户名和密码：
 /data/open-xiaoai/client "ws://你的server地址:4399?username=admin&password=123"
 # 或使用简写参数：
@@ -78,6 +81,17 @@ chmod +x /data/open-xiaoai/client
 | 二进制 | ~1-3 MB | ~5 MB（ldflags -s -w） |
 | 依赖 | 7 个 crate | 2 个（websocket + uuid） |
 | 协议 | 完全一致 | 完全一致 |
+
+## 多地址连接（LAN + Tailscale）
+
+支持传入多个 server 地址，按顺序尝试连接，直到成功：
+
+```shell
+# 先试 LAN，失败再试 Tailscale MagicDNS
+./client ws://192.168.1.100:4399 ws://my-server:4399
+```
+
+适用于：音箱在家连局域网，带回老家后通过 Tailscale 连接。Server 会根据客户端连接方式返回对应的音乐 URL，详见 [connection-aware-base-url-design](../../docs/connection-aware-base-url-design.md)。
 
 ## 认证
 
