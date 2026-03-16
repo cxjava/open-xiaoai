@@ -81,7 +81,7 @@ chmod +x /data/open-xiaoai/client
 
 ## 认证
 
-若服务端（gpt-go / gemini-go）在 config 中配置了 `auth.username` 和 `auth.password`，客户端需在连接 URL 中携带相同凭据：
+若服务端（gpt-go / gemini-go）启用了认证（`auth.users` 非空），客户端需在连接 URL 中携带有效凭据：
 
 ```
 ws://server地址:4399?username=alice&password=password123

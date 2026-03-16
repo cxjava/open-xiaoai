@@ -13,9 +13,15 @@ type ServerConfig struct {
 	Port int    `yaml:"port"`
 }
 
-type AuthConfig struct {
+// AuthUser 单用户凭证
+type AuthUser struct {
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
+}
+
+// AuthConfig 多用户认证。users 为空则跳过验证
+type AuthConfig struct {
+	Users []AuthUser `yaml:"users"`
 }
 
 // InterruptConfig 打断配置：仅当关键词或唤醒词匹配时才打断
@@ -89,6 +95,21 @@ func loadConfig(path string) (*AppConfig, error) {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
 	return cfg, nil
+}
+
+// RequiresAuth 是否启用认证（users 非空）
+func (c *AuthConfig) RequiresAuth() bool {
+	return len(c.Users) > 0
+}
+
+// ValidateAuth 校验用户名密码
+func (c *AuthConfig) ValidateAuth(username, password string) bool {
+	for _, u := range c.Users {
+		if u.Username == username && u.Password == password {
+			return true
+		}
+	}
+	return false
 }
 
 // ShouldInterrupt 是否应打断：instruction 文本匹配关键词时返回 true

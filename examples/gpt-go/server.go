@@ -45,14 +45,13 @@ func startServer(ctx context.Context, engine *Engine) error {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// 认证：若 username 和 password 均非空则校验，否则跳过
-		if cfg.Auth.Username != "" && cfg.Auth.Password != "" {
+		if cfg.Auth.RequiresAuth() {
 			user, pass, ok := parseBasicAuth(r)
 			if !ok {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
-			if user != cfg.Auth.Username || pass != cfg.Auth.Password {
+			if !cfg.Auth.ValidateAuth(user, pass) {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}

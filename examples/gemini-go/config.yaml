@@ -3,10 +3,14 @@ server:
   host: "0.0.0.0"
   port: 4399
 
-# WebSocket 认证（为空则跳过验证）
+# WebSocket 认证（users 为空则跳过验证）
 auth:
-  username: ""
-  password: ""
+  users: []
+  # users:
+  #   - username: "alice"
+  #     password: "secret1"
+  #   - username: "bob"
+  #     password: "secret2"
 
 # HTTP 代理（可选，用于无法直连 API 时，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080）
 # proxy: "http://127.0.0.1:7890"
