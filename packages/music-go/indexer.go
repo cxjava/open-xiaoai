@@ -7,6 +7,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -23,6 +25,7 @@ type IndexedSong struct {
 	AlbumLower  string `json:"album_lower"`
 	Size        int64  `json:"size"`
 	MtimeNs     int64  `json:"mtime_ns"`
+	Episode     int    `json:"episode,omitempty"` // 集数，0 表示非分集或未知
 }
 
 // Indexer 曲库索引器
@@ -244,6 +247,8 @@ func (i *Indexer) Refresh() error {
 	return nil
 }
 
+var defaultEpisodeRe = regexp.MustCompile(DefaultEpisodePattern)
+
 func extractMetadata(path string) (IndexedSong, error) {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -258,6 +263,7 @@ func extractMetadata(path string) (IndexedSong, error) {
 	ext := filepath.Ext(base)
 	name := strings.TrimSuffix(base, ext)
 	s.NameLower = strings.ToLower(name)
+	s.Episode = extractEpisodeFromName(name)
 
 	f, err := os.Open(path)
 	if err != nil {
@@ -279,4 +285,14 @@ func extractMetadata(path string) (IndexedSong, error) {
 		s.AlbumLower = strings.ToLower(a)
 	}
 	return s, nil
+}
+
+// extractEpisodeFromName 从文件名提取集数，支持 第11集、11集、第11回、01 等格式
+func extractEpisodeFromName(name string) int {
+	matches := defaultEpisodeRe.FindStringSubmatch(name)
+	if len(matches) < 2 {
+		return 0
+	}
+	n, _ := strconv.Atoi(matches[1])
+	return n
 }

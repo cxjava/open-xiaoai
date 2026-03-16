@@ -8,6 +8,15 @@ type MusicConfig struct {
 	Search     SearchConfig     `yaml:"search"`
 	Commands   CommandsConfig   `yaml:"commands"`
 	HTTP       HTTPConfig       `yaml:"http"`
+	Stories    []StoryConfig    `yaml:"stories"` // 故事/有声书分类，用于精确匹配与集数解析
+}
+
+// StoryConfig 故事/有声书配置
+type StoryConfig struct {
+	Name           string   `yaml:"name"`             // 系列名，如「西游记」
+	Aliases        []string `yaml:"aliases"`          // 别名，如「西游」
+	Dir            string   `yaml:"dir"`             // 限定目录（可选），空则在 dirs 下搜索
+	EpisodePattern string   `yaml:"episode_pattern"` // 集数正则，如 `第?(\\d+)[集回]`，空则用默认
 }
 
 // SearchConfig 搜索与索引配置
@@ -35,6 +44,9 @@ type HTTPConfig struct {
 
 // DefaultExtensions 默认支持的音频扩展名
 var DefaultExtensions = []string{".mp3", ".flac", ".wav", ".m4a", ".aac", ".ogg"}
+
+// DefaultEpisodePattern 默认集数提取正则：匹配 第11集、11集、第11回、11 等
+const DefaultEpisodePattern = `第?(\d+)[集回]?`
 
 // DefaultCommands 默认指令关键词
 var DefaultCommands = CommandsConfig{
@@ -77,5 +89,10 @@ func (c *MusicConfig) ApplyDefaults() {
 	}
 	if c.HTTP.Port <= 0 {
 		c.HTTP.Port = 18080
+	}
+	for i := range c.Stories {
+		if c.Stories[i].EpisodePattern == "" {
+			c.Stories[i].EpisodePattern = DefaultEpisodePattern
+		}
 	}
 }

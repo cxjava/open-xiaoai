@@ -190,16 +190,46 @@ func (m *Module) handlePlay(keyword string) bool {
 		m.player.Speak("本地音乐目录还没有配置")
 		return true
 	}
-	songs := m.indexer.Search(keyword, m.config.Search.MaxResults)
+	intent := ParsePlayIntent(keyword)
+	var songs []IndexedSong
+	// 有集数或匹配故事配置时，使用 SearchEpisode（按集数排序）
+	useEpisode := intent.Episode > 0 || m.matchStory(intent.SeriesName)
+	if useEpisode {
+		songs = m.indexer.SearchEpisode(intent.SeriesName, intent.Episode, m.config.Search.MaxResults)
+	} else {
+		songs = m.indexer.Search(intent.SeriesName, m.config.Search.MaxResults)
+	}
 	if len(songs) == 0 {
-		m.player.Speak(fmt.Sprintf("没有找到包含%s的歌曲", keyword))
+		m.player.Speak(fmt.Sprintf("没有找到包含%s的歌曲", intent.SeriesName))
 		return true
 	}
 	items := m.player.BuildQueueFromSongs(songs)
 	m.player.StopTTS()
-	m.player.Speak(fmt.Sprintf("好的，找到%d首歌曲", len(items)))
+	if intent.Episode > 0 {
+		m.player.Speak(fmt.Sprintf("好的，找到%d集，从第%d集开始播放", len(items), intent.Episode))
+	} else if useEpisode {
+		m.player.Speak(fmt.Sprintf("好的，找到%d集", len(items)))
+	} else {
+		m.player.Speak(fmt.Sprintf("好的，找到%d首歌曲", len(items)))
+	}
 	m.player.SetQueue(items)
 	return true
+}
+
+// matchStory 检查系列名是否匹配任一故事配置
+func (m *Module) matchStory(seriesName string) bool {
+	lower := strings.ToLower(seriesName)
+	for _, s := range m.config.Stories {
+		if strings.ToLower(s.Name) == lower {
+			return true
+		}
+		for _, a := range s.Aliases {
+			if strings.ToLower(a) == lower {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (m *Module) handleRandomPlay(text string) bool {
