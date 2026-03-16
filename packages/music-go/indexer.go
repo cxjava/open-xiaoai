@@ -1,0 +1,282 @@
+package music
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+
+	"github.com/dhowden/tag"
+	"golang.org/x/sync/errgroup"
+)
+
+// IndexedSong 索引后的歌曲元数据
+type IndexedSong struct {
+	Path        string `json:"path"`
+	NameLower   string `json:"name_lower"`
+	TitleLower  string `json:"title_lower"`
+	ArtistLower string `json:"artist_lower"`
+	AlbumLower  string `json:"album_lower"`
+	Size        int64  `json:"size"`
+	MtimeNs     int64  `json:"mtime_ns"`
+}
+
+// Indexer 曲库索引器
+type Indexer struct {
+	mu       sync.RWMutex
+	songs    []IndexedSong
+	pathSet  map[string]struct{}
+	config   *MusicConfig
+	indexDir string
+}
+
+// NewIndexer 创建索引器
+func NewIndexer(cfg *MusicConfig) *Indexer {
+	return &Indexer{
+		songs:   nil,
+		pathSet: make(map[string]struct{}),
+		config:  cfg,
+	}
+}
+
+// Songs 返回当前索引的歌曲列表（只读副本）
+func (i *Indexer) Songs() []IndexedSong {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	if len(i.songs) == 0 {
+		return nil
+	}
+	out := make([]IndexedSong, len(i.songs))
+	copy(out, i.songs)
+	return out
+}
+
+// Load 从磁盘加载索引
+func (i *Indexer) Load() error {
+	path := i.config.Search.IndexFile
+	if path == "" {
+		return nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read index: %w", err)
+	}
+	var songs []IndexedSong
+	if err := json.Unmarshal(data, &songs); err != nil {
+		return fmt.Errorf("parse index: %w", err)
+	}
+	i.mu.Lock()
+	i.songs = songs
+	i.pathSet = make(map[string]struct{})
+	for _, s := range songs {
+		i.pathSet[s.Path] = struct{}{}
+	}
+	i.mu.Unlock()
+	log.Printf("📂 已加载曲库索引: %d 首", len(songs))
+	return nil
+}
+
+// Save 保存索引到磁盘
+func (i *Indexer) Save() error {
+	i.mu.RLock()
+	songs := make([]IndexedSong, len(i.songs))
+	copy(songs, i.songs)
+	i.mu.RUnlock()
+
+	if len(songs) == 0 {
+		return nil
+	}
+	path := i.config.Search.IndexFile
+	if path == "" {
+		return nil
+	}
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("mkdir: %w", err)
+	}
+	data, err := json.MarshalIndent(songs, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal index: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("write index: %w", err)
+	}
+	return nil
+}
+
+// Refresh 刷新索引：扫描目录，提取元数据
+func (i *Indexer) Refresh() error {
+	extSet := make(map[string]struct{})
+	for _, ext := range i.config.Extensions {
+		extSet[strings.ToLower(ext)] = struct{}{}
+	}
+
+	var files []string
+	for _, dir := range i.config.Dirs {
+		_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return nil
+			}
+			if info.IsDir() {
+				return nil
+			}
+			ext := strings.ToLower(filepath.Ext(path))
+			if _, ok := extSet[ext]; ok {
+				abs, err := filepath.Abs(path)
+				if err == nil {
+					files = append(files, abs)
+				}
+			}
+			return nil
+		})
+	}
+
+	if len(files) == 0 {
+		i.mu.Lock()
+		i.songs = nil
+		i.pathSet = make(map[string]struct{})
+		i.mu.Unlock()
+		return nil
+	}
+
+	// 检查增量：path + size + mtime
+	needRefresh := make([]string, 0, len(files))
+	oldByPath := make(map[string]IndexedSong)
+	i.mu.RLock()
+	for _, s := range i.songs {
+		oldByPath[s.Path] = s
+	}
+	i.mu.RUnlock()
+
+	for _, path := range files {
+		info, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		old, ok := oldByPath[path]
+		if !ok || old.Size != info.Size() || old.MtimeNs != info.ModTime().UnixNano() {
+			needRefresh = append(needRefresh, path)
+		}
+	}
+
+	// 未变的直接复用
+	newSongs := make([]IndexedSong, 0, len(files))
+	for _, path := range files {
+		if old, ok := oldByPath[path]; ok {
+			info, err := os.Stat(path)
+			if err == nil && old.Size == info.Size() && old.MtimeNs == info.ModTime().UnixNano() {
+				newSongs = append(newSongs, old)
+				continue
+			}
+		}
+		newSongs = append(newSongs, IndexedSong{Path: path})
+	}
+
+	// 并发提取需要刷新的元数据
+	refreshed := make(map[string]IndexedSong)
+	var refreshedMu sync.Mutex
+	g, _ := errgroup.WithContext(context.Background())
+
+	for _, path := range needRefresh {
+		path := path
+		g.Go(func() error {
+			s, err := extractMetadata(path)
+			if err != nil {
+				return nil
+			}
+			refreshedMu.Lock()
+			refreshed[path] = s
+			refreshedMu.Unlock()
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	// 构建最终列表
+	newSongs = nil
+	for _, path := range files {
+		if s, ok := refreshed[path]; ok {
+			newSongs = append(newSongs, s)
+		} else if old, ok := oldByPath[path]; ok {
+			newSongs = append(newSongs, old)
+		} else {
+			info, _ := os.Stat(path)
+			s := IndexedSong{Path: path, Size: 0, MtimeNs: 0}
+			if info != nil {
+				s.Size = info.Size()
+				s.MtimeNs = info.ModTime().UnixNano()
+			}
+			base := filepath.Base(path)
+			ext := filepath.Ext(base)
+			s.NameLower = strings.ToLower(strings.TrimSuffix(base, ext))
+			newSongs = append(newSongs, s)
+		}
+	}
+
+	// 填充未提取到的（文件可能已删除或无法读取）
+	for i := range newSongs {
+		if newSongs[i].NameLower == "" {
+			base := filepath.Base(newSongs[i].Path)
+			ext := filepath.Ext(base)
+			name := strings.TrimSuffix(base, ext)
+			newSongs[i].NameLower = strings.ToLower(name)
+		}
+	}
+
+	i.mu.Lock()
+	i.songs = newSongs
+	i.pathSet = make(map[string]struct{})
+	for _, s := range newSongs {
+		i.pathSet[s.Path] = struct{}{}
+	}
+	i.mu.Unlock()
+
+	return nil
+}
+
+func extractMetadata(path string) (IndexedSong, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return IndexedSong{}, err
+	}
+	s := IndexedSong{
+		Path:    path,
+		Size:    info.Size(),
+		MtimeNs: info.ModTime().UnixNano(),
+	}
+	base := filepath.Base(path)
+	ext := filepath.Ext(base)
+	name := strings.TrimSuffix(base, ext)
+	s.NameLower = strings.ToLower(name)
+
+	f, err := os.Open(path)
+	if err != nil {
+		return s, err
+	}
+	defer f.Close()
+
+	m, err := tag.ReadFrom(f)
+	if err != nil {
+		return s, nil
+	}
+	if t := m.Title(); t != "" {
+		s.TitleLower = strings.ToLower(t)
+	}
+	if a := m.Artist(); a != "" {
+		s.ArtistLower = strings.ToLower(a)
+	}
+	if a := m.Album(); a != "" {
+		s.AlbumLower = strings.ToLower(a)
+	}
+	return s, nil
+}
