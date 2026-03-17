@@ -34,8 +34,11 @@ builds:
     tool: tinygo
     env:
       - CGO_ENABLED=0
+    flags:
+      - -no-debug
+      - -panic=trap
     ldflags:
-      - -no-debug -panic=trap
+      - -s -w
     goos:
       - linux
     goarch:
