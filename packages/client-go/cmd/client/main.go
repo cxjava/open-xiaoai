@@ -183,6 +183,7 @@ func (c *AppClient) run() {
 	log.Println("✅ 已启动")
 
 	var currentIndex int
+	reconnectDelay := 1 * time.Second
 	for {
 		var conn *websocket.Conn
 		var serverURL string
@@ -195,12 +196,13 @@ func (c *AppClient) run() {
 			wsConn, err := c.connectWS(ctx, u, username, password)
 			cancel()
 			if err != nil {
-				log.Printf("⚠️ 连接失败 %s: %v，1 秒后重试", u, err)
-				time.Sleep(1 * time.Second)
+				log.Printf("⚠️ 连接失败 %s: %v，%v 后重试", u, err, reconnectDelay)
+				reconnectDelay = backoffSleep(reconnectDelay)
 				continue
 			}
 			conn = wsConn
 			serverURL = u
+			reconnectDelay = 1 * time.Second // 成功后重置退避
 		} else {
 			// 远程连接模式：按顺序尝试，直到成功
 			for _, u := range serverURLs {
@@ -214,14 +216,20 @@ func (c *AppClient) run() {
 				if err == nil {
 					conn = wsConn
 					serverURL = u
+					reconnectDelay = 1 * time.Second // 成功后重置退避
 					break
 				}
 				log.Printf("⚠️ 连接失败 %s: %v，尝试下一个", u, err)
 			}
+			if conn == nil {
+				log.Printf("⚠️ 所有地址均失败，%v 后重试", reconnectDelay)
+				reconnectDelay = backoffSleep(reconnectDelay)
+				continue
+			}
 		}
 
 		if conn == nil {
-			time.Sleep(1 * time.Second)
+			reconnectDelay = backoffSleep(reconnectDelay)
 			continue
 		}
 		log.Printf("✅ 已连接: %s", serverURL)
@@ -262,6 +270,17 @@ func (c *AppClient) run() {
 		}
 		log.Println("❌ 已断开连接")
 	}
+}
+
+// backoffSleep 执行指数退避睡眠，返回下一次应使用的 delay（用于下次调用）。
+// 初始 delay 1s，最大 30s，每次翻倍。
+func backoffSleep(delay time.Duration) time.Duration {
+	time.Sleep(delay)
+	next := delay * 2
+	if next > 30*time.Second {
+		next = 30 * time.Second
+	}
+	return next
 }
 
 func parseSwitchKeywords(s string) []string {
@@ -373,7 +392,8 @@ func stopRecording(_ connect.Request) (connect.Response, error) {
 // --- Event/Stream Handlers ---
 
 func onEvent(event connect.Event) error {
-	log.Printf("🔥 收到事件: %+v", event)
+	// log.Printf("🔥 收到事件: %+v", event)
+	// 不记录每条事件，避免老设备上频繁 log I/O 占用 CPU/存储
 	return nil
 }
 

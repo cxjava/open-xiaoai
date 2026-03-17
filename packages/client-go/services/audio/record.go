@@ -11,6 +11,14 @@ import (
 
 const a113CaptureBitsPerSample = 32
 
+// chunkPool 复用录音 chunk 缓冲，减少老设备上的 GC 压力
+var chunkPool = sync.Pool{
+	New: func() interface{} {
+		// DefaultAudioConfig: BufferSize=1280, PeriodSize=320, S32=4B, 1ch -> targetSize=1280*4=5120
+		return make([]byte, 8192) // 略大于典型 targetSize，兼容不同配置
+	},
+}
+
 type AudioRecorder struct {
 	mu       sync.Mutex
 	cmd      *exec.Cmd
@@ -100,7 +108,12 @@ func (r *AudioRecorder) readLoop(stdout io.ReadCloser, onStream func([]byte) err
 		accumulated = append(accumulated, buf[:n]...)
 
 		for len(accumulated) >= targetSize {
-			chunk := make([]byte, targetSize)
+			chunk := chunkPool.Get().([]byte)
+			if cap(chunk) < targetSize {
+				chunk = make([]byte, targetSize)
+			} else {
+				chunk = chunk[:targetSize]
+			}
 			copy(chunk, accumulated[:targetSize])
 			accumulated = accumulated[targetSize:]
 
@@ -108,6 +121,7 @@ func (r *AudioRecorder) readLoop(stdout io.ReadCloser, onStream func([]byte) err
 			if len(transformed) > 0 {
 				onStream(transformed)
 			}
+			chunkPool.Put(chunk)
 		}
 	}
 

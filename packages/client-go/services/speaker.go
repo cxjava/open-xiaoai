@@ -1,3 +1,7 @@
+// Package services 提供音箱控制等能力。
+//
+// Speaker 为实验性 API，当前未被主程序引用，仅供扩展或二次开发使用。
+// 使用前需确保已建立 WebSocket 连接且服务端支持 run_shell RPC。
 package services
 
 import (
@@ -9,6 +13,8 @@ import (
 	"github.com/idootop/open-xiaoai/packages/client-go/utils"
 )
 
+// Speaker 提供音箱设备控制接口（实验性）。
+// 通过 run_shell RPC 调用设备上的 ubus/mphelper 等命令。
 type Speaker struct{}
 
 func (s *Speaker) GetBoot() (string, error) {
@@ -19,8 +25,13 @@ func (s *Speaker) GetBoot() (string, error) {
 	return strings.TrimSpace(res.Stdout), nil
 }
 
+// shellEscape escapes s for safe use inside single-quoted sh -c string. Replaces ' with '\''.
+func shellEscape(s string) string {
+	return strings.ReplaceAll(s, "'", "'\\''")
+}
+
 func (s *Speaker) SetBoot(bootPart string) (bool, error) {
-	script := fmt.Sprintf("fw_env -s boot_part %s >/dev/null 2>&1 && echo $(fw_env -g boot_part)", bootPart)
+	script := fmt.Sprintf("fw_env -s boot_part '%s' >/dev/null 2>&1 && echo $(fw_env -g boot_part)", shellEscape(bootPart))
 	res, err := s.runShell(script)
 	if err != nil {
 		return false, err
@@ -76,7 +87,7 @@ func (s *Speaker) Pause() (bool, error) {
 }
 
 func (s *Speaker) PlayText(text string) (bool, error) {
-	script := fmt.Sprintf("/usr/sbin/tts_play.sh '%s'", text)
+	script := fmt.Sprintf("/usr/sbin/tts_play.sh '%s'", shellEscape(text))
 	res, err := s.runShell(script)
 	if err != nil {
 		return false, err
@@ -85,7 +96,11 @@ func (s *Speaker) PlayText(text string) (bool, error) {
 }
 
 func (s *Speaker) PlayURL(url string) (bool, error) {
-	script := fmt.Sprintf(`ubus call mediaplayer player_play_url '{"url":"%s","type": 1}'`, url)
+	payload, err := json.Marshal(map[string]interface{}{"url": url, "type": 1})
+	if err != nil {
+		return false, err
+	}
+	script := fmt.Sprintf("ubus call mediaplayer player_play_url '%s'", shellEscape(string(payload)))
 	res, err := s.runShell(script)
 	if err != nil {
 		return false, err
@@ -121,7 +136,11 @@ func (s *Speaker) MicOff() (bool, error) {
 }
 
 func (s *Speaker) AskXiaoAI(text string) (bool, error) {
-	script := fmt.Sprintf(`ubus call mibrain ai_service '{"tts":1,"nlp":1,"nlp_text":"%s"}'`, text)
+	payload, err := json.Marshal(map[string]interface{}{"tts": 1, "nlp": 1, "nlp_text": text})
+	if err != nil {
+		return false, err
+	}
+	script := fmt.Sprintf("ubus call mibrain ai_service '%s'", shellEscape(string(payload)))
 	res, err := s.runShell(script)
 	if err != nil {
 		return false, err

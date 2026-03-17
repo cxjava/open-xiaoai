@@ -48,6 +48,11 @@ func (fm *FileMonitor) Stop() {
 	}
 }
 
+const (
+	fileMonitorPollInterval   = 100 * time.Millisecond  // 降低轮询频率，减轻老设备 CPU 负担
+	fileMonitorWaitInterval   = 200 * time.Millisecond // 等待文件存在时的间隔
+)
+
 func (fm *FileMonitor) run(ctx context.Context, filePath string, onUpdate func(FileMonitorEvent)) {
 	// Wait for file to exist
 	for {
@@ -57,38 +62,93 @@ func (fm *FileMonitor) run(ctx context.Context, filePath string, onUpdate func(F
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(10 * time.Millisecond):
+		case <-time.After(fileMonitorWaitInterval):
 		}
 	}
 
-	f, err := os.Open(filePath)
-	if err != nil {
-		return
+	var f *os.File
+	openFile := func() (*os.File, error) {
+		file, err := os.Open(filePath)
+		if err != nil {
+			return nil, err
+		}
+		info, err := file.Stat()
+		if err != nil {
+			file.Close()
+			return nil, err
+		}
+		_, err = file.Seek(info.Size(), 0)
+		if err != nil {
+			file.Close()
+			return nil, err
+		}
+		return file, nil
 	}
-	defer f.Close()
 
-	// Seek to end
-	info, err := f.Stat()
+	f, err := openFile()
 	if err != nil {
 		return
 	}
-	position := info.Size()
+	defer func() {
+		if f != nil {
+			f.Close()
+		}
+	}()
+
+	position := int64(0)
+	if info, err := f.Stat(); err == nil {
+		position = info.Size()
+	}
+
+	reader := bufio.NewReaderSize(f, 4096) // 4KB 缓冲，适配典型 log 行，减轻老设备内存
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(10 * time.Millisecond):
+		case <-time.After(fileMonitorPollInterval):
 		}
 
-		info, err := f.Stat()
+		pathInfo, err := os.Stat(filePath)
 		if err != nil {
 			continue
 		}
 
-		currentSize := info.Size()
+		// Retry open if we closed due to rotation but re-open failed
+		if f == nil {
+			newF, err := openFile()
+			if err != nil {
+				continue
+			}
+			f = newF
+			position = 0
+			onUpdate(FileMonitorEvent{Type: "NewFile"})
+			continue
+		}
+
+		fileInfo, err := f.Stat()
+		if err != nil {
+			f = nil
+			continue
+		}
+
+		// Detect log rotation: file at path is different from our open fd (e.g. mv old.log new.log; new old.log)
+		if !os.SameFile(fileInfo, pathInfo) {
+			f.Close()
+			f = nil
+			newF, err := openFile()
+			if err != nil {
+				continue
+			}
+			f = newF
+			position = 0
+			onUpdate(FileMonitorEvent{Type: "NewFile"})
+			continue
+		}
+
+		currentSize := pathInfo.Size()
 		if currentSize < position {
-			// File was truncated or recreated
+			// File was truncated in place
 			position = 0
 			onUpdate(FileMonitorEvent{Type: "NewFile"})
 		}
@@ -98,11 +158,17 @@ func (fm *FileMonitor) run(ctx context.Context, filePath string, onUpdate func(F
 		}
 
 		f.Seek(position, 0)
-		scanner := bufio.NewScanner(f)
-		for scanner.Scan() {
-			line := strings.TrimSpace(scanner.Text())
-			if line != "" {
-				onUpdate(FileMonitorEvent{Type: "NewLine", Line: line})
+		reader.Reset(f)
+		for {
+			line, err := reader.ReadBytes('\n')
+			if len(line) > 0 {
+				s := strings.TrimSpace(string(line))
+				if s != "" {
+					onUpdate(FileMonitorEvent{Type: "NewLine", Line: s})
+				}
+			}
+			if err != nil {
+				break
 			}
 		}
 

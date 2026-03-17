@@ -1,3 +1,4 @@
+// Package utils 提供通用工具。
 package utils
 
 import (
@@ -5,8 +6,13 @@ import (
 	"sync"
 )
 
+// EventCallback 是事件总线的回调函数类型。
 type EventCallback func(data interface{})
 
+// EventBus 提供进程内发布/订阅能力，用于解耦组件间的异步通信。
+// 使用方式：在启动时 Subscribe(event, callback)，在需要时 Publish(event, data) 或 PublishAsync(event, data)。
+// PublishAsync 通过 TaskManager 异步执行回调，适用于不希望阻塞发布者的场景。
+// 当前主程序未使用，可供扩展（如自定义事件驱动逻辑）时使用。
 type EventBus struct {
 	mu          sync.RWMutex
 	subscribers map[string][]EventCallback

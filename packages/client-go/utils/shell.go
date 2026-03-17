@@ -8,6 +8,28 @@ import (
 	"time"
 )
 
+// maxOutputBytes 限制 shell 输出大小，防止恶意/异常脚本导致老设备 OOM
+const maxOutputBytes = 512 * 1024
+
+// limitedBuffer 在达到 max 后静默截断，避免内存膨胀
+type limitedBuffer struct {
+	buf bytes.Buffer
+	max int
+}
+
+func (l *limitedBuffer) Write(p []byte) (n int, err error) {
+	remain := l.max - l.buf.Len()
+	if remain <= 0 {
+		return len(p), nil // 已满，丢弃后续写入
+	}
+	if len(p) > remain {
+		p = p[:remain]
+	}
+	return l.buf.Write(p)
+}
+
+func (l *limitedBuffer) String() string { return l.buf.String() }
+
 type CommandResult struct {
 	Stdout   string `json:"stdout"`
 	Stderr   string `json:"stderr"`
@@ -24,9 +46,10 @@ func RunShellWithTimeout(script string, timeout time.Duration) (*CommandResult, 
 
 	cmd := exec.CommandContext(ctx, "sh", "-c", script)
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	stdout := &limitedBuffer{max: maxOutputBytes}
+	stderr := &limitedBuffer{max: maxOutputBytes}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	err := cmd.Run()
 	exitCode := 0
@@ -79,9 +102,10 @@ func RunShellInterruptible(script string, timeout time.Duration) (*CommandResult
 
 	cmd := exec.CommandContext(ctx, "sh", "-c", script)
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	stdout := &limitedBuffer{max: maxOutputBytes}
+	stderr := &limitedBuffer{max: maxOutputBytes}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	err := cmd.Run()
 	exitCode := 0

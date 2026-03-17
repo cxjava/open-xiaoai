@@ -10,6 +10,10 @@ type task struct {
 	done   <-chan struct{}
 }
 
+// TaskManager 管理按 tag 分组的后台任务，支持取消和等待。
+// 使用方式：Add(tag, fn) 启动任务，Dispose(tag) 取消该 tag 下所有任务并等待结束。
+// 典型场景：EventBus.PublishAsync 使用 TaskManager 执行异步回调；应用退出时可用 Dispose 清理。
+// 当前主程序未直接使用，由 EventBus.PublishAsync 内部使用。
 type TaskManager struct {
 	mu    sync.Mutex
 	tasks map[string][]task

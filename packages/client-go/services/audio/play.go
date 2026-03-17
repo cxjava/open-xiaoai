@@ -3,6 +3,7 @@ package audio
 import (
 	"fmt"
 	"io"
+	"log"
 	"os/exec"
 	"sync"
 )
@@ -81,7 +82,10 @@ func (p *AudioPlayer) writeLoop() {
 			w := p.stdin
 			p.mu.Unlock()
 			if w != nil {
-				w.Write(data)
+				if _, err := w.Write(data); err != nil {
+					log.Printf("❌ audio write error: %v", err)
+					return
+				}
 			}
 		case <-p.stopCh:
 			return

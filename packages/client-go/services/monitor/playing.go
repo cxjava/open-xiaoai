@@ -58,7 +58,7 @@ func (pm *PlayingMonitor) run(ctx context.Context, onUpdate func(PlayingStatus))
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(10 * time.Millisecond):
+		case <-time.After(200 * time.Millisecond):
 		}
 
 		res, err := utils.RunShell("mphelper mute_stat")
