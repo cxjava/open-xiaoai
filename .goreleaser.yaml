@@ -26,6 +26,25 @@ builds:
       - "5"
       - "6"
       - "7"
+
+  - id: client-go-tinygo
+    dir: packages/client-go
+    binary: open-xiaoai-client-go-tinygo
+    main: ./cmd/client/
+    tool: tinygo
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -no-debug -panic=trap
+    goos:
+      - linux
+    goarch:
+      - arm64
+      - arm
+    goarm:
+      - "5"
+      - "6"
+      - "7"
       
   - id: gemini-go
     dir: examples/gemini-go
@@ -59,7 +78,7 @@ builds:
       - arm64
 
 upx:
-  - ids: [client-go, gemini-go, chat-go]
+  - ids: [client-go, client-go-tinygo, gemini-go, chat-go]
     enabled: true
     
 archives:
@@ -68,6 +87,16 @@ archives:
     formats: [tar.gz]
     name_template: >-
       open-xiaoai-client-go_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+  - id: client-go-tinygo
+    builds: [client-go-tinygo]
+    formats: [tar.gz]
+    name_template: >-
+      open-xiaoai-client-go-tinygo_
       {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "386" }}i386

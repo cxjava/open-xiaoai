@@ -18,7 +18,11 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: stable
+          # go-version: stable
+          go-version: '1.25.8'
+      - uses: acifani/setup-tinygo@v2
+        with:
+          tinygo-version: '0.40.1'
       - name: Check out code
         uses: actions/checkout@v6
       - name: Install UPX
