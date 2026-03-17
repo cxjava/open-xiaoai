@@ -37,8 +37,6 @@ builds:
     flags:
       - -no-debug
       - -panic=trap
-    ldflags:
-      - -s -w
     goos:
       - linux
     goarch:
