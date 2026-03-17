@@ -4,6 +4,9 @@ import "fmt"
 
 const VERSION = "1.0.0"
 
+// Version is set at build time via -ldflags -X
+var Version = VERSION
+
 type AppError struct {
 	Message string
 	Err     error

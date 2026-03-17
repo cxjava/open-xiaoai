@@ -43,7 +43,8 @@ builds:
     flags:
       - -no-debug
       - -panic=trap
-    ldflags: []
+    ldflags:
+      - -X github.com/idootop/open-xiaoai/packages/client-go/base.Version={{.Version}}
     goos:
       - linux
     goarch:
