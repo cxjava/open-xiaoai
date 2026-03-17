@@ -10,9 +10,9 @@ version: 2
 
 before:
   hooks:
-    - cd packages/client-go && go mod tidy && go mod download
-    - cd examples/gemini-go && go mod tidy && go mod download
-    - cd examples/chat-go && go mod tidy && go mod download
+    - sh -c "cd packages/client-go && go mod tidy && go mod download"
+    - sh -c "cd examples/gemini-go && go mod tidy && go mod download"
+    - sh -c "cd examples/chat-go && go mod tidy && go mod download"
 
 builds:
   - id: client-go
