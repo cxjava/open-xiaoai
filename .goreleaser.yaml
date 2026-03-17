@@ -51,8 +51,8 @@ builds:
       - arm64
       - arm
     goarm:
+      - "6"
       - "7"
-      
   - id: gemini-go
     dir: examples/gemini-go
     binary: gemini-go
