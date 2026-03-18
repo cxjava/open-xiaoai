@@ -64,7 +64,7 @@ func parseInstructionUserText(data json.RawMessage) string {
 		return ""
 	}
 	var msg instructionLogLine
-	if err := json.Unmarshal([]byte(ev.Line), &msg); err != nil {
+	if err := json.NewDecoder(strings.NewReader(ev.Line)).Decode(&msg); err != nil {
 		return ""
 	}
 	if !strings.EqualFold(msg.Header.Namespace, "SpeechRecognizer") ||

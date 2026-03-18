@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"unsafe"
 )
 
 // FileServer HTTP 静态文件服务
@@ -92,7 +93,7 @@ func (s *FileServer) CreateFileURL(absPath string) string {
 	if _, ok := s.allowList[abs]; !ok {
 		return ""
 	}
-	hexPath := hex.EncodeToString([]byte(abs))
+	hexPath := hex.EncodeToString(unsafe.Slice(unsafe.StringData(abs), len(abs)))
 	filename := url.PathEscape(filepath.Base(abs))
 	return fmt.Sprintf("%s/file/%s/%s", s.baseURL, hexPath, filename)
 }

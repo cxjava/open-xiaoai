@@ -121,7 +121,7 @@ func (i *Indexer) Refresh() error {
 		extSet[strings.ToLower(ext)] = struct{}{}
 	}
 
-	var files []string
+	files := make([]string, 0, 1024)
 	for _, dir := range i.config.Dirs {
 		_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 			if err != nil {

@@ -1,7 +1,7 @@
 package music
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -22,7 +22,7 @@ func (i *Indexer) Search(keyword string, maxResults int) []IndexedSong {
 	copy(songs, i.songs)
 	i.mu.RUnlock()
 
-	var matched []IndexedSong
+	matched := make([]IndexedSong, 0, min(len(songs), maxResults))
 	for _, s := range songs {
 		if containsAny(s, kw) {
 			matched = append(matched, s)
@@ -105,7 +105,7 @@ func (i *Indexer) SearchEpisode(seriesName string, episode int, maxResults int) 
 	copy(songs, i.songs)
 	i.mu.RUnlock()
 
-	var matched []IndexedSong
+	matched := make([]IndexedSong, 0, min(len(songs), maxResults))
 	for _, s := range songs {
 		if !containsAny(s, resolvedName) {
 			continue

@@ -61,7 +61,8 @@ var DefaultCommands = CommandsConfig{
 // ApplyDefaults 填充默认值
 func (c *MusicConfig) ApplyDefaults() {
 	if len(c.Extensions) == 0 {
-		c.Extensions = append([]string{}, DefaultExtensions...)
+		c.Extensions = make([]string, len(DefaultExtensions))
+		copy(c.Extensions, DefaultExtensions)
 	}
 	if c.Search.MaxResults <= 0 {
 		c.Search.MaxResults = 20
@@ -70,19 +71,24 @@ func (c *MusicConfig) ApplyDefaults() {
 		c.Search.IndexFile = "cache/music_index.json"
 	}
 	if len(c.Commands.PlayKeywords) == 0 {
-		c.Commands.PlayKeywords = append([]string{}, DefaultCommands.PlayKeywords...)
+		c.Commands.PlayKeywords = make([]string, len(DefaultCommands.PlayKeywords))
+		copy(c.Commands.PlayKeywords, DefaultCommands.PlayKeywords)
 	}
 	if len(c.Commands.StopKeywords) == 0 {
-		c.Commands.StopKeywords = append([]string{}, DefaultCommands.StopKeywords...)
+		c.Commands.StopKeywords = make([]string, len(DefaultCommands.StopKeywords))
+		copy(c.Commands.StopKeywords, DefaultCommands.StopKeywords)
 	}
 	if len(c.Commands.RefreshKeywords) == 0 {
-		c.Commands.RefreshKeywords = append([]string{}, DefaultCommands.RefreshKeywords...)
+		c.Commands.RefreshKeywords = make([]string, len(DefaultCommands.RefreshKeywords))
+		copy(c.Commands.RefreshKeywords, DefaultCommands.RefreshKeywords)
 	}
 	if len(c.Commands.RandomPlayKeywords) == 0 {
-		c.Commands.RandomPlayKeywords = append([]string{}, DefaultCommands.RandomPlayKeywords...)
+		c.Commands.RandomPlayKeywords = make([]string, len(DefaultCommands.RandomPlayKeywords))
+		copy(c.Commands.RandomPlayKeywords, DefaultCommands.RandomPlayKeywords)
 	}
 	if len(c.Commands.InterruptWhitelist) == 0 {
-		c.Commands.InterruptWhitelist = append([]string{}, DefaultCommands.InterruptWhitelist...)
+		c.Commands.InterruptWhitelist = make([]string, len(DefaultCommands.InterruptWhitelist))
+		copy(c.Commands.InterruptWhitelist, DefaultCommands.InterruptWhitelist)
 	}
 	if c.Commands.AutoResumeDelaySec <= 0 {
 		c.Commands.AutoResumeDelaySec = DefaultCommands.AutoResumeDelaySec

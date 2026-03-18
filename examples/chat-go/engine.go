@@ -84,9 +84,12 @@ type logMessage struct {
 
 // OnEvent is called by the WebSocket server when an event arrives from client-rust.
 func (e *Engine) OnEvent(event connect.Event) {
-	data, _ := json.Marshal(event.Data)
-	dataStr := string(data)
-
+	var data []byte
+	var dataStr string
+	if event.Data != nil {
+		data = *event.Data
+		dataStr = string(data)
+	}
 	switch event.Event {
 	case "playing":
 		e.speaker.UpdateStatus(dataStr)
@@ -107,7 +110,7 @@ func (e *Engine) handleInstruction(data []byte) {
 	}
 
 	var msg logMessage
-	if err := json.Unmarshal([]byte(wrapper.NewLine), &msg); err != nil {
+	if err := json.NewDecoder(strings.NewReader(wrapper.NewLine)).Decode(&msg); err != nil {
 		return
 	}
 
@@ -308,15 +311,21 @@ func hasSentenceEnd(s string) bool {
 // --- Chat history management ---
 
 func (e *Engine) buildMessages(userText string) []openai.ChatCompletionMessage {
-	var msgs []openai.ChatCompletionMessage
+	e.historyMu.Lock()
+	historyLen := len(e.history)
+	e.historyMu.Unlock()
 
+	cap := historyLen
+	if e.config.Prompt.System != "" {
+		cap++
+	}
+	msgs := make([]openai.ChatCompletionMessage, 0, cap)
 	if e.config.Prompt.System != "" {
 		msgs = append(msgs, openai.ChatCompletionMessage{
 			Role:    openai.ChatMessageRoleSystem,
 			Content: e.config.Prompt.System,
 		})
 	}
-
 	e.historyMu.Lock()
 	msgs = append(msgs, e.history...)
 	e.historyMu.Unlock()
