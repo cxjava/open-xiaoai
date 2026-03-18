@@ -18,20 +18,20 @@ const minaAPI = "https://api2.mina.mi.com"
 const minaUserAgent = "MICO/AndroidApp/@SHIP.TO.2A2FE0D7@/2.4.40"
 
 type deviceListResponse struct {
-	Code int           `json:"code"`
-	Data []MiNADevice  `json:"data"`
+	Code int          `json:"code"`
+	Data []MiNADevice `json:"data"`
 }
 
 type MiNADevice struct {
 	DeviceID        string `json:"deviceID"`
-	SerialNumber   string `json:"serialNumber"`
-	Name           string `json:"name"`
-	Alias          string `json:"alias"`
-	MiotDID        string `json:"miotDID"`
-	Hardware       string `json:"hardware"`
+	SerialNumber    string `json:"serialNumber"`
+	Name            string `json:"name"`
+	Alias           string `json:"alias"`
+	MiotDID         string `json:"miotDID"`
+	Hardware        string `json:"hardware"`
 	DeviceSNProfile string `json:"deviceSNProfile"`
-	Mac            string `json:"mac"`
-	RomVersion     string `json:"romVersion"`
+	Mac             string `json:"mac"`
+	RomVersion      string `json:"romVersion"`
 }
 
 func GetDevice(acc *account.MiAccount, client *http.Client) (*account.MiAccount, error) {
@@ -74,14 +74,14 @@ func GetDevice(acc *account.MiAccount, client *http.Client) (*account.MiAccount,
 			logger.Debug("匹配到设备: %s (hardware=%s, romVersion=%s)", name, getStr(dm, "hardware"), getStr(dm, "romVersion"))
 			acc.Device = &account.MiNADevice{
 				DeviceID:        deviceID,
-				SerialNumber:   getStr(dm, "serialNumber"),
-				Name:           name,
-				Alias:          alias,
-				MiotDID:        miotDID,
-				Hardware:       getStr(dm, "hardware"),
+				SerialNumber:    getStr(dm, "serialNumber"),
+				Name:            name,
+				Alias:           alias,
+				MiotDID:         miotDID,
+				Hardware:        getStr(dm, "hardware"),
 				DeviceSNProfile: getStr(dm, "deviceSNProfile"),
-				Mac:            mac,
-				RomVersion:     getStr(dm, "romVersion"),
+				Mac:             mac,
+				RomVersion:      getStr(dm, "romVersion"),
 			}
 			return acc, nil
 		}

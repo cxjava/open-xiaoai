@@ -230,4 +230,3 @@ func DownloadFirmware(firmware *FirmwareInfo, assetsDir string, client *http.Cli
 	logger.Info("下载完成: %s (%.2fMB, %.2f秒)", destPath, float64(downloaded)/1024/1024, elapsed)
 	return destPath, nil
 }
-

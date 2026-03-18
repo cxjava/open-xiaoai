@@ -54,17 +54,17 @@ type CustomReply struct {
 }
 
 type AppConfig struct {
-	Server         ServerConfig     `yaml:"server"`
-	Auth           AuthConfig       `yaml:"auth"`
-	Proxy          string          `yaml:"proxy"` // HTTP/SOCKS5 代理，如 http://127.0.0.1:7890
-	LLM            LLMConfig       `yaml:"llm"`
-	Prompt         PromptConfig    `yaml:"prompt"`
-	Context        ContextConfig   `yaml:"context"`
-	Interrupt      InterruptConfig `yaml:"interrupt"`
-	CallAIKeywords []string        `yaml:"call_ai_keywords"`
-	CustomReplies  []CustomReply   `yaml:"custom_replies"`
-	Greeting       string          `yaml:"greeting"`
-	ErrorMessage   string          `yaml:"error_message"`
+	Server         ServerConfig      `yaml:"server"`
+	Auth           AuthConfig        `yaml:"auth"`
+	Proxy          string            `yaml:"proxy"` // HTTP/SOCKS5 代理，如 http://127.0.0.1:7890
+	LLM            LLMConfig         `yaml:"llm"`
+	Prompt         PromptConfig      `yaml:"prompt"`
+	Context        ContextConfig     `yaml:"context"`
+	Interrupt      InterruptConfig   `yaml:"interrupt"`
+	CallAIKeywords []string          `yaml:"call_ai_keywords"`
+	CustomReplies  []CustomReply     `yaml:"custom_replies"`
+	Greeting       string            `yaml:"greeting"`
+	ErrorMessage   string            `yaml:"error_message"`
 	Music          music.MusicConfig `yaml:"music"`
 }
 

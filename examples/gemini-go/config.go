@@ -31,26 +31,26 @@ type GeminiSpeechConfig struct {
 }
 
 type GeminiConfig struct {
-	APIKey             string             `yaml:"api_key"`
-	Model              string             `yaml:"model"`
-	SystemInstruction  string             `yaml:"system_instruction"`
-	Speech             GeminiSpeechConfig `yaml:"speech"`
+	APIKey            string             `yaml:"api_key"`
+	Model             string             `yaml:"model"`
+	SystemInstruction string             `yaml:"system_instruction"`
+	Speech            GeminiSpeechConfig `yaml:"speech"`
 }
 
 // InterruptConfig 打断配置：仅当关键词或唤醒词匹配时才打断（与 chat-go 统一）
 type InterruptConfig struct {
 	Keywords     []string `yaml:"keywords"`      // 关键词列表
 	MatchMode    string   `yaml:"match_mode"`    // exact, prefix, contains
-	KwsInterrupt bool     `yaml:"kws_interrupt"`  // 唤醒词(kws事件)也触发打断
+	KwsInterrupt bool     `yaml:"kws_interrupt"` // 唤醒词(kws事件)也触发打断
 }
 
 type AppConfig struct {
-	Server    ServerConfig     `yaml:"server"`
-	Auth      AuthConfig       `yaml:"auth"`
-	Proxy     string          `yaml:"proxy"` // HTTP/SOCKS5 代理，如 http://127.0.0.1:7890
-	Gemini    GeminiConfig    `yaml:"gemini"`
-	Interrupt InterruptConfig `yaml:"interrupt"`
-	Greeting  string           `yaml:"greeting"`
+	Server    ServerConfig      `yaml:"server"`
+	Auth      AuthConfig        `yaml:"auth"`
+	Proxy     string            `yaml:"proxy"` // HTTP/SOCKS5 代理，如 http://127.0.0.1:7890
+	Gemini    GeminiConfig      `yaml:"gemini"`
+	Interrupt InterruptConfig   `yaml:"interrupt"`
+	Greeting  string            `yaml:"greeting"`
 	Music     music.MusicConfig `yaml:"music"`
 }
 

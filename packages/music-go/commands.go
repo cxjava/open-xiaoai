@@ -101,8 +101,9 @@ var episodeRegex = regexp.MustCompile(`(?:第)?(\d+)[集回]?`)
 
 // ParsePlayIntent 从播放关键词中解析系列名和集数
 // 例如：「西游记11集」-> {SeriesName:"西游记", Episode:11}
-//      「水浒传第5集」-> {SeriesName:"水浒传", Episode:5}
-//      「许嵩」-> {SeriesName:"许嵩", Episode:0}
+//
+//	「水浒传第5集」-> {SeriesName:"水浒传", Episode:5}
+//	「许嵩」-> {SeriesName:"许嵩", Episode:0}
 func ParsePlayIntent(keyword string) PlayIntent {
 	keyword = Normalize(keyword)
 	norm := NormalizedForMatch(keyword)
@@ -131,4 +132,3 @@ func parseInt(s string) int {
 	}
 	return n
 }
-

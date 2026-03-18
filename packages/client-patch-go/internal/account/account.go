@@ -36,26 +36,26 @@ type MiPass struct {
 
 type MiNADevice struct {
 	DeviceID        string `json:"deviceID"`
-	SerialNumber   string `json:"serialNumber"`
-	Name           string `json:"name"`
-	Alias          string `json:"alias"`
-	MiotDID        string `json:"miotDID"`
-	Hardware       string `json:"hardware"`
+	SerialNumber    string `json:"serialNumber"`
+	Name            string `json:"name"`
+	Alias           string `json:"alias"`
+	MiotDID         string `json:"miotDID"`
+	Hardware        string `json:"hardware"`
 	DeviceSNProfile string `json:"deviceSNProfile"`
-	Mac            string `json:"mac"`
-	RomVersion     string `json:"romVersion"`
+	Mac             string `json:"mac"`
+	RomVersion      string `json:"romVersion"`
 }
 
 type MiAccount struct {
-	SID           string      `json:"sid"`
-	DeviceID      string      `json:"deviceId"`
-	UserID        string      `json:"userId"`
-	Password      string      `json:"password"`
-	PassToken     string      `json:"passToken"`
-	Pass          *MiPass     `json:"pass"`
-	ServiceToken  string     `json:"serviceToken"`
-	DID           string     `json:"did"`
-	Device        *MiNADevice `json:"device"`
+	SID          string      `json:"sid"`
+	DeviceID     string      `json:"deviceId"`
+	UserID       string      `json:"userId"`
+	Password     string      `json:"password"`
+	PassToken    string      `json:"passToken"`
+	Pass         *MiPass     `json:"pass"`
+	ServiceToken string      `json:"serviceToken"`
+	DID          string      `json:"did"`
+	Device       *MiNADevice `json:"device"`
 }
 
 func md5Hash(s string) string {

@@ -2,19 +2,19 @@ package music
 
 // MusicConfig 音乐模块配置
 type MusicConfig struct {
-	Enabled    bool             `yaml:"enabled"`
-	Dirs       []string         `yaml:"dirs"`
-	Extensions []string         `yaml:"extensions"`
-	Search     SearchConfig     `yaml:"search"`
-	Commands   CommandsConfig   `yaml:"commands"`
-	HTTP       HTTPConfig       `yaml:"http"`
-	Stories    []StoryConfig    `yaml:"stories"` // 故事/有声书分类，用于精确匹配与集数解析
+	Enabled    bool           `yaml:"enabled"`
+	Dirs       []string       `yaml:"dirs"`
+	Extensions []string       `yaml:"extensions"`
+	Search     SearchConfig   `yaml:"search"`
+	Commands   CommandsConfig `yaml:"commands"`
+	HTTP       HTTPConfig     `yaml:"http"`
+	Stories    []StoryConfig  `yaml:"stories"` // 故事/有声书分类，用于精确匹配与集数解析
 }
 
 // StoryConfig 故事/有声书配置
 type StoryConfig struct {
-	Name           string   `yaml:"name"`             // 系列名，如「西游记」
-	Aliases        []string `yaml:"aliases"`          // 别名，如「西游」
+	Name           string   `yaml:"name"`            // 系列名，如「西游记」
+	Aliases        []string `yaml:"aliases"`         // 别名，如「西游」
 	Dir            string   `yaml:"dir"`             // 限定目录（可选），空则在 dirs 下搜索
 	EpisodePattern string   `yaml:"episode_pattern"` // 集数正则，如 `第?(\\d+)[集回]`，空则用默认
 }
