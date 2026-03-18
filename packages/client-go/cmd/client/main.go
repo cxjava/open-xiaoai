@@ -22,7 +22,7 @@ import (
 )
 
 var (
-	flagSwitch        = flag.Bool("switch", false, "切换模式：多地址用于 gemini-go/chat-go 语音切换，说切换词即切换 Server")
+	flagSwitch         = flag.Bool("switch", false, "切换模式：多地址用于 gemini-go/chat-go 语音切换，说切换词即切换 Server")
 	flagSwitchKeywords = flag.String("switch-keywords", "小智模式,对话模式", "切换模式下的触发词，逗号分隔")
 )
 
@@ -134,7 +134,7 @@ func parseInstructionText(line string) string {
 			} `json:"results"`
 		} `json:"payload"`
 	}
-	if err := json.Unmarshal([]byte(line), &msg); err != nil {
+	if err := json.NewDecoder(strings.NewReader(line)).Decode(&msg); err != nil {
 		return ""
 	}
 	if !strings.EqualFold(msg.Header.Namespace, "SpeechRecognizer") ||
@@ -285,7 +285,7 @@ func backoffSleep(delay time.Duration) time.Duration {
 
 func parseSwitchKeywords(s string) []string {
 	parts := strings.Split(s, ",")
-	var out []string
+	out := make([]string, 0, len(parts))
 	for _, p := range parts {
 		p = strings.TrimSpace(p)
 		if p != "" {

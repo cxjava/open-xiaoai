@@ -1,6 +1,6 @@
 package utils
 
-import "math/rand"
+import "math/rand/v2"
 
 // PickOne returns a random element from items. The second return value is false if items is empty.
 func PickOne[T any](items []T) (T, bool) {
@@ -8,5 +8,5 @@ func PickOne[T any](items []T) (T, bool) {
 	if len(items) == 0 {
 		return zero, false
 	}
-	return items[rand.Intn(len(items))], true
+	return items[rand.IntN(len(items))], true
 }

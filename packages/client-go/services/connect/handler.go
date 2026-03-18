@@ -129,6 +129,12 @@ func EncodeEvent(event string, data interface{}) ([]byte, error) {
 	return MarshalEvent(NewEvent(event, rawData))
 }
 
+// EncodeEventFromRaw 当 data 已是 JSON 时使用，避免二次 Marshal 和反射。
+func EncodeEventFromRaw(event string, rawJSON []byte) ([]byte, error) {
+	raw := json.RawMessage(rawJSON)
+	return MarshalEvent(NewEvent(event, &raw))
+}
+
 // EncodeStream creates a JSON binary message for sending a stream.
 func EncodeStream(tag string, bytes []byte, data interface{}) ([]byte, error) {
 	var rawData *json.RawMessage

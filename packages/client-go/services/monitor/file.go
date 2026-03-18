@@ -49,8 +49,8 @@ func (fm *FileMonitor) Stop() {
 }
 
 const (
-	fileMonitorPollInterval   = 100 * time.Millisecond  // 降低轮询频率，减轻老设备 CPU 负担
-	fileMonitorWaitInterval   = 200 * time.Millisecond // 等待文件存在时的间隔
+	fileMonitorPollInterval = 100 * time.Millisecond // 降低轮询频率，减轻老设备 CPU 负担
+	fileMonitorWaitInterval = 200 * time.Millisecond // 等待文件存在时的间隔
 )
 
 func (fm *FileMonitor) run(ctx context.Context, filePath string, onUpdate func(FileMonitorEvent)) {

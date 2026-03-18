@@ -19,10 +19,20 @@ var chunkPool = sync.Pool{
 	},
 }
 
+// readBufPool 复用 readLoop 的读取缓冲
+var readBufPool = sync.Pool{
+	New: func() interface{} { return make([]byte, 4096) },
+}
+
+// s16ChunkPool 复用 S32->S16 转换输出缓冲
+var s16ChunkPool = sync.Pool{
+	New: func() interface{} { return make([]byte, 4096) },
+}
+
 type AudioRecorder struct {
-	mu       sync.Mutex
-	cmd      *exec.Cmd
-	stopCh   chan struct{}
+	mu        sync.Mutex
+	cmd       *exec.Cmd
+	stopCh    chan struct{}
 	recording bool
 }
 
@@ -91,7 +101,13 @@ func (r *AudioRecorder) readLoop(stdout io.ReadCloser, onStream func([]byte) err
 	readSize := readFrames * bytesPerFrame
 
 	accumulated := make([]byte, 0, targetSize*2)
-	buf := make([]byte, readSize)
+	buf := readBufPool.Get().([]byte)
+	if cap(buf) < readSize {
+		buf = make([]byte, readSize)
+	} else {
+		buf = buf[:readSize]
+	}
+	defer readBufPool.Put(buf)
 
 	for {
 		select {
@@ -117,10 +133,11 @@ func (r *AudioRecorder) readLoop(stdout io.ReadCloser, onStream func([]byte) err
 			copy(chunk, accumulated[:targetSize])
 			accumulated = accumulated[targetSize:]
 
-			transformed := transformStreamChunk(chunk, requestedCfg, captureCfg)
+			transformed, release := transformStreamChunk(chunk, requestedCfg, captureCfg)
 			if len(transformed) > 0 {
 				onStream(transformed)
 			}
+			release()
 			chunkPool.Put(chunk)
 		}
 	}
@@ -162,23 +179,34 @@ func captureConfigForRecording(requested AudioConfig) AudioConfig {
 	return capture
 }
 
-func transformStreamChunk(chunk []byte, requested, capture AudioConfig) []byte {
+func transformStreamChunk(chunk []byte, requested, capture AudioConfig) ([]byte, func()) {
 	if requested.BitsPerSample != 16 || capture.BitsPerSample != a113CaptureBitsPerSample {
-		return chunk
+		return chunk, func() {}
 	}
 	return convertA113S32ToS16(chunk)
 }
 
 // convertA113S32ToS16 converts A113 PDM S32_LE data to S16_LE.
 // A113 PDM data lives in lower 24 bits of S32_LE: shift right by 8, clamp to int16.
-func convertA113S32ToS16(chunk []byte) []byte {
+// 返回的 release 必须在 onStream 返回后调用，用于将缓冲归还对象池。
+func convertA113S32ToS16(chunk []byte) ([]byte, func()) {
 	if len(chunk)%4 != 0 {
-		return nil
+		return nil, nil
 	}
 
 	frameCount := len(chunk) / 4
-	out := make([]byte, frameCount*2)
+	outSize := frameCount * 2
+	buf := s16ChunkPool.Get().([]byte)
+	if cap(buf) < outSize {
+		buf = make([]byte, outSize)
+		return fillS16FromChunk(chunk, buf[:outSize]), func() {}
+	}
+	buf = buf[:outSize]
+	return fillS16FromChunk(chunk, buf), func() { s16ChunkPool.Put(buf) }
+}
 
+func fillS16FromChunk(chunk, out []byte) []byte {
+	frameCount := len(chunk) / 4
 	for i := 0; i < frameCount; i++ {
 		sample := int32(binary.LittleEndian.Uint32(chunk[i*4 : i*4+4]))
 		mapped := sample >> 8
@@ -189,6 +217,5 @@ func convertA113S32ToS16(chunk []byte) []byte {
 		}
 		binary.LittleEndian.PutUint16(out[i*2:i*2+2], uint16(int16(mapped)))
 	}
-
 	return out
 }

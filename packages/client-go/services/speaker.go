@@ -25,7 +25,7 @@ func (s *Speaker) GetBoot() (string, error) {
 	return strings.TrimSpace(res.Stdout), nil
 }
 
-// shellEscape escapes s for safe use inside single-quoted sh -c string. Replaces ' with '\''.
+// shellEscape escapes s for safe use inside single-quoted sh -c string. Replaces ' with '\”.
 func shellEscape(s string) string {
 	return strings.ReplaceAll(s, "'", "'\\''")
 }

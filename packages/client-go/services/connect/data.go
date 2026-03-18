@@ -44,10 +44,14 @@ type Response struct {
 	Data *json.RawMessage `json:"data,omitempty"`
 }
 
+var (
+	codeSuccess = 0
+	msgSuccess  = "success"
+	codeError   = -1
+)
+
 func SuccessResponse() Response {
-	code := 0
-	msg := "success"
-	return Response{ID: "0", Code: &code, Msg: &msg}
+	return Response{ID: "0", Code: &codeSuccess, Msg: &msgSuccess}
 }
 
 func DataResponse(data json.RawMessage) Response {
@@ -55,9 +59,8 @@ func DataResponse(data json.RawMessage) Response {
 }
 
 func ErrorResponse(id string, err error) Response {
-	code := -1
 	msg := err.Error()
-	return Response{ID: id, Code: &code, Msg: &msg}
+	return Response{ID: id, Code: &codeError, Msg: &msg}
 }
 
 type Event struct {

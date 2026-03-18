@@ -20,7 +20,7 @@ type RPC struct {
 
 var (
 	rpcInstance *RPC
-	rpcOnce    sync.Once
+	rpcOnce     sync.Once
 )
 
 func GetRPC() *RPC {
