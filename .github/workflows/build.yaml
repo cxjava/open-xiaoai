@@ -20,7 +20,7 @@ jobs:
         with:
           # go-version: stable
           go-version: '1.25.8'
-      - uses: acifani/setup-tinygo@v2
+      - uses: acifani/setup-tinygo@v3
         with:
           tinygo-version: '0.40.1'
       - name: Check out code
