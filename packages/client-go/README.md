@@ -18,6 +18,13 @@
 # 创建目录
 mkdir /data/open-xiaoai
 
+# 下载 client-go（小爱音箱 Pro / ARMv7）
+curl -L -o /tmp/open-xiaoai-client-go.tar.gz \
+  https://github.com/cxjava/open-xiaoai/releases/latest/download/open-xiaoai-client-go_Linux_armv7.tar.gz
+tar -xzf /tmp/open-xiaoai-client-go.tar.gz -C /data/open-xiaoai
+mv /data/open-xiaoai/open-xiaoai-client-go /data/open-xiaoai/client
+chmod +x /data/open-xiaoai/client
+
 # 运行（替换成你的 server 地址）
 /data/open-xiaoai/client ws://你的server地址:4399
 
@@ -31,6 +38,42 @@ mkdir /data/open-xiaoai
 /data/open-xiaoai/client "ws://你的server地址:4399?username=admin&password=123"
 # 或使用简写参数：
 /data/open-xiaoai/client "ws://你的server地址:4399?u=admin&p=123"
+```
+
+### 启动脚本
+
+`init.sh` 只负责启动已下载好的 `/data/open-xiaoai/client`，不会自动下载或覆盖二进制。
+
+```shell
+# 保存 server 地址，启动脚本不传参时会读取该文件
+echo "ws://你的server地址:4399" > /data/open-xiaoai/server.txt
+
+# 下载启动脚本
+curl -L -o /data/open-xiaoai/init.sh \
+  https://raw.githubusercontent.com/idootop/open-xiaoai/main/packages/client-go/init.sh
+chmod +x /data/open-xiaoai/init.sh
+
+# 启动
+/data/open-xiaoai/init.sh
+
+# 也可以直接传参，传参时会忽略 server.txt
+/data/open-xiaoai/init.sh ws://你的server地址:4399
+
+# 多地址或切换模式同样支持
+/data/open-xiaoai/init.sh ws://192.168.1.100:4399 ws://my-server:4399
+/data/open-xiaoai/init.sh -switch ws://你的IP:4399 ws://你的IP:4400
+```
+
+如果你想要开机自启动，下载 `boot.sh` 到 `/data/init.sh`，重启小爱音箱即可。`boot.sh` 会等待网络可用后，在后台执行 `/data/open-xiaoai/init.sh`。
+
+```shell
+# 下载 boot.sh 文件到 /data/init.sh 开机时自启动
+curl -L -o /data/init.sh \
+  https://raw.githubusercontent.com/idootop/open-xiaoai/main/packages/client-go/boot.sh
+chmod +x /data/init.sh
+
+# 重启小爱音箱
+reboot
 ```
 
 > [!IMPORTANT]
