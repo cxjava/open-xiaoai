@@ -3,6 +3,7 @@ package monitor
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"os"
 	"strings"
 	"time"
@@ -11,6 +12,18 @@ import (
 type FileMonitorEvent struct {
 	Type string // "NewFile" or "NewLine"
 	Line string // populated for NewLine events
+}
+
+func (e FileMonitorEvent) MarshalJSON() ([]byte, error) {
+	switch e.Type {
+	case "NewFile":
+		return json.Marshal(e.Type)
+	case "NewLine":
+		return json.Marshal(map[string]string{"NewLine": e.Line})
+	default:
+		type fileMonitorEvent FileMonitorEvent
+		return json.Marshal(fileMonitorEvent(e))
+	}
 }
 
 type FileMonitor struct {

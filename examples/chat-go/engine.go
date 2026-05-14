@@ -82,7 +82,7 @@ type logMessage struct {
 	} `json:"payload"`
 }
 
-// OnEvent is called by the WebSocket server when an event arrives from client-rust.
+// OnEvent is called by the WebSocket server when an event arrives from a client.
 func (e *Engine) OnEvent(event connect.Event) {
 	var data []byte
 	var dataStr string
@@ -104,13 +104,13 @@ func (e *Engine) OnEvent(event connect.Event) {
 }
 
 func (e *Engine) handleInstruction(data []byte) {
-	var wrapper newLineWrapper
-	if err := json.Unmarshal(data, &wrapper); err != nil || wrapper.NewLine == "" {
+	line := instructionLineFromEventData(data)
+	if line == "" {
 		return
 	}
 
 	var msg logMessage
-	if err := json.NewDecoder(strings.NewReader(wrapper.NewLine)).Decode(&msg); err != nil {
+	if err := json.NewDecoder(strings.NewReader(line)).Decode(&msg); err != nil {
 		return
 	}
 
@@ -128,6 +128,14 @@ func (e *Engine) handleInstruction(data []byte) {
 		return
 	}
 	e.OnMessage(text)
+}
+
+func instructionLineFromEventData(data []byte) string {
+	var wrapper newLineWrapper
+	if err := json.Unmarshal(data, &wrapper); err != nil {
+		return ""
+	}
+	return wrapper.NewLine
 }
 
 // --- Message handling (from MiGPTEngine.onMessage) ---
