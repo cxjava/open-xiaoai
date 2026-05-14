@@ -1,6 +1,6 @@
-module github.com/idootop/open-xiaoai/packages/client-go
+module github.com/cxjava/open-xiaoai/packages/client-go
 
-go 1.25.8
+go 1.26
 
 require (
 	github.com/coder/websocket v1.8.14

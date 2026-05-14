@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/idootop/open-xiaoai/client-patch-go/internal/logger"
+	"github.com/cxjava/open-xiaoai/client-patch-go/internal/logger"
 )
 
 const loginAPI = "https://account.xiaomi.com/pass"

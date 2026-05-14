@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/idootop/open-xiaoai/packages/client-go/services/connect"
+	"github.com/cxjava/open-xiaoai/packages/client-go/services/connect"
 )
 
 // PlaybackState 播放状态

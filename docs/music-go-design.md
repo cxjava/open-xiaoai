@@ -366,11 +366,11 @@ playing 事件 status == "Paused":
 ## 十、依赖
 
 ```go
-module github.com/idootop/open-xiaoai/packages/music-go
+module github.com/cxjava/open-xiaoai/packages/music-go
 
 require (
     github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
-    github.com/idootop/open-xiaoai/packages/client-go v0.0.0
+    github.com/cxjava/open-xiaoai/packages/client-go v0.0.0
 )
 ```
 

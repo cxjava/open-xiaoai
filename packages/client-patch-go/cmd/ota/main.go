@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 
-	"github.com/idootop/open-xiaoai/client-patch-go/internal/account"
-	"github.com/idootop/open-xiaoai/client-patch-go/internal/ota"
+	"github.com/cxjava/open-xiaoai/client-patch-go/internal/account"
+	"github.com/cxjava/open-xiaoai/client-patch-go/internal/ota"
 )
 
 func main() {
@@ -91,7 +91,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("\n[OTA] === 当前版本固件 ===\n")
+	fmt.Print("\n[OTA] === 当前版本固件 ===\n\n")
 	sizeStr := "未知"
 	if firmware.Size > 0 {
 		sizeStr = fmt.Sprintf("%.2fMB", float64(firmware.Size)/1024/1024)

@@ -1,11 +1,11 @@
-module github.com/idootop/open-xiaoai/examples/gemini-go
+module github.com/cxjava/open-xiaoai/examples/gemini-go
 
-go 1.25.8
+go 1.26
 
 require (
 	github.com/coder/websocket v1.8.14
-	github.com/idootop/open-xiaoai/packages/client-go v0.0.0
-	github.com/idootop/open-xiaoai/packages/music-go v0.0.0
+	github.com/cxjava/open-xiaoai/packages/client-go v0.0.0
+	github.com/cxjava/open-xiaoai/packages/music-go v0.0.0
 	google.golang.org/genai v1.49.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -33,6 +33,6 @@ require (
 )
 
 replace (
-	github.com/idootop/open-xiaoai/packages/client-go => ../../packages/client-go
-	github.com/idootop/open-xiaoai/packages/music-go => ../../packages/music-go
+	github.com/cxjava/open-xiaoai/packages/client-go => ../../packages/client-go
+	github.com/cxjava/open-xiaoai/packages/music-go => ../../packages/music-go
 )

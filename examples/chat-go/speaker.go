@@ -6,7 +6,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/idootop/open-xiaoai/packages/client-go/services/connect"
+	"github.com/cxjava/open-xiaoai/packages/client-go/services/connect"
 )
 
 type Speaker struct {

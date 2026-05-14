@@ -8,9 +8,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/idootop/open-xiaoai/packages/client-go/services/audio"
-	"github.com/idootop/open-xiaoai/packages/client-go/services/connect"
-	"github.com/idootop/open-xiaoai/packages/music-go"
+	"github.com/cxjava/open-xiaoai/packages/client-go/services/audio"
+	"github.com/cxjava/open-xiaoai/packages/client-go/services/connect"
+	"github.com/cxjava/open-xiaoai/packages/music-go"
 )
 
 // Echo suppression: don't forward mic audio to Gemini while AI is speaking.

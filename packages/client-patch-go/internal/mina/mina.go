@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cxjava/open-xiaoai/client-patch-go/internal/account"
+	"github.com/cxjava/open-xiaoai/client-patch-go/internal/logger"
 	"github.com/google/uuid"
-	"github.com/idootop/open-xiaoai/client-patch-go/internal/account"
-	"github.com/idootop/open-xiaoai/client-patch-go/internal/logger"
 )
 
 const minaAPI = "https://api2.mina.mi.com"

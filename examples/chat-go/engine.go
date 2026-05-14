@@ -15,7 +15,7 @@ import (
 
 	openai "github.com/sashabaranov/go-openai"
 
-	"github.com/idootop/open-xiaoai/packages/client-go/services/connect"
+	"github.com/cxjava/open-xiaoai/packages/client-go/services/connect"
 )
 
 // Engine handles user messages: keyword matching → OpenAI streaming → sentence-by-sentence TTS.

@@ -220,4 +220,4 @@ client-go 的 `SendEvent("playing", status)` 传入 `PlayingStatus` 字符串，
 ## 依赖
 
 - `github.com/dhowden/tag`：音频元数据提取
-- `github.com/idootop/open-xiaoai/packages/client-go`：connect 包（RPC、Event）
+- `github.com/cxjava/open-xiaoai/packages/client-go`：connect 包（RPC、Event）

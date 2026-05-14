@@ -14,11 +14,11 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/idootop/open-xiaoai/packages/client-go/base"
-	"github.com/idootop/open-xiaoai/packages/client-go/services/audio"
-	"github.com/idootop/open-xiaoai/packages/client-go/services/connect"
-	"github.com/idootop/open-xiaoai/packages/client-go/services/monitor"
-	"github.com/idootop/open-xiaoai/packages/client-go/utils"
+	"github.com/cxjava/open-xiaoai/packages/client-go/base"
+	"github.com/cxjava/open-xiaoai/packages/client-go/services/audio"
+	"github.com/cxjava/open-xiaoai/packages/client-go/services/connect"
+	"github.com/cxjava/open-xiaoai/packages/client-go/services/monitor"
+	"github.com/cxjava/open-xiaoai/packages/client-go/utils"
 )
 
 var (
