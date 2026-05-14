@@ -18,16 +18,16 @@ auth:
 # LLM API 配置（支持 OpenAI 兼容接口，如 OpenAI / Claude / DeepSeek / 通义千问）
 # Claude 可通过 OpenRouter 使用：base_url: https://openrouter.ai/api/v1，model: anthropic/claude-3.5-sonnet
 llm:
-  # 接口地址，以 /v1 结尾
-  base_url: "https://api.openai.com/v1"
+  # 接口 base url，通常以 /v1 结尾
+  # base_url: "https://api.openai.com/v1"
   # base_url: "https://openrouter.ai/api/v1"   # Claude 等（需 OpenRouter API Key）
-  # base_url: "https://api.deepseek.com/v1"
+  base_url: "https://api.deepseek.com"
   # API 密钥
   api_key: "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
   # 模型名称
-  model: "gpt-4.1-mini"
+  # model: "gpt-4.1-mini"
   # model: "anthropic/claude-3.5-sonnet"       # 通过 OpenRouter
-  # model: "deepseek-chat"
+  model: "deepseek-v4-flash"
 
 # 系统提示词
 prompt:
@@ -62,8 +62,8 @@ error_message: "出错了，请稍后再试吧！"
 custom_replies:
   - match: "测试播放文字"
     text: "你好，很高兴认识你！"
-  - match: "测试播放音乐"
-    url: "https://example.com/hello.mp3"
+  # - match: "测试播放音乐"
+  #   url: "https://example.com/hello.mp3"
 
 # 本地音乐模块（可选）
 # music:
