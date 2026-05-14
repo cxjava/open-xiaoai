@@ -3,6 +3,7 @@ package music
 import (
 	"fmt"
 	"log"
+	"math/rand/v2"
 	"sync"
 	"time"
 
@@ -17,6 +18,16 @@ const (
 	StatePlaying
 )
 
+// PlaybackMode controls how the queue advances when a song ends.
+type PlaybackMode int
+
+const (
+	PlaybackModeSequence PlaybackMode = iota
+	PlaybackModeRepeatOne
+	PlaybackModeRepeatAll
+	PlaybackModeShuffle
+)
+
 // SongItem 队列中的歌曲项
 type SongItem struct {
 	Path string
@@ -27,11 +38,15 @@ type SongItem struct {
 type Player struct {
 	mu          sync.Mutex
 	queue       []SongItem
+	playlist    []SongItem
+	history     []SongItem
 	currentSong *SongItem
 	state       PlaybackState
+	mode        PlaybackMode
 	fileServer  *FileServer
 	indexer     *Indexer
 	resumeTimer *time.Timer
+	playURL     func(url string) error
 }
 
 // NewPlayer 创建播放器
@@ -44,6 +59,9 @@ func NewPlayer(fs *FileServer, idx *Indexer) *Player {
 
 // PlayURL 播放 URL（通过 RPC 调用设备）
 func (p *Player) PlayURL(url string) error {
+	if p.playURL != nil {
+		return p.playURL(url)
+	}
 	script := fmt.Sprintf(`ubus call mediaplayer player_play_url '{"url":"%s","type":1}'`, url)
 	timeout := uint64(10000)
 	_, err := connect.GetRPC().CallRemote("run_shell", script, &timeout)
@@ -86,6 +104,8 @@ func (p *Player) ClearQueue() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.queue = nil
+	p.playlist = nil
+	p.history = nil
 	p.currentSong = nil
 }
 
@@ -93,22 +113,31 @@ func (p *Player) ClearQueue() {
 func (p *Player) SetQueue(items []SongItem) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.queue = items
+	p.queue = copySongItems(items)
+	p.playlist = copySongItems(items)
+	p.history = nil
+	p.currentSong = nil
 	if len(p.queue) == 0 {
 		return false
 	}
-	p.playNextLocked()
-	return true
+	return p.playNextLocked(false)
 }
 
 // playNextLocked 播放下一首（调用方需已持锁）
-func (p *Player) playNextLocked() {
+func (p *Player) playNextLocked(recordHistory bool) bool {
 	if len(p.queue) == 0 {
 		p.currentSong = nil
-		return
+		return false
 	}
 	item := p.queue[0]
 	p.queue = p.queue[1:]
+	return p.playItemLocked(item, recordHistory)
+}
+
+func (p *Player) playItemLocked(item SongItem, recordHistory bool) bool {
+	if recordHistory && p.currentSong != nil {
+		p.history = append(p.history, *p.currentSong)
+	}
 	p.currentSong = &item
 	p.state = StateIdle // 防抖：切歌后立即 Idle，避免加载期间的短暂 Idle 重复触发
 	p.mu.Unlock()
@@ -117,9 +146,10 @@ func (p *Player) playNextLocked() {
 	if err != nil {
 		log.Printf("❌ 播放失败: %v", err)
 		p.currentSong = nil
-		return
+		return false
 	}
 	log.Printf("🎵 正在播放: %s", item.Path)
+	return true
 }
 
 // OnPlayingStatus 处理 playing 事件状态变化
@@ -130,8 +160,12 @@ func (p *Player) OnPlayingStatus(status string) {
 
 	switch status {
 	case "Idle":
-		if p.state == StatePlaying && len(p.queue) > 0 {
-			p.playNextLocked()
+		if p.state == StatePlaying {
+			if p.mode == PlaybackModeRepeatOne {
+				p.replayCurrentLocked()
+			} else {
+				p.nextLocked(true)
+			}
 		}
 		p.state = StateIdle
 	case "Playing":
@@ -143,11 +177,77 @@ func (p *Player) OnPlayingStatus(status string) {
 	}
 }
 
+func (p *Player) Next() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.nextLocked(true)
+}
+
+func (p *Player) nextLocked(recordHistory bool) bool {
+	if len(p.queue) > 0 {
+		return p.playNextLocked(recordHistory)
+	}
+	switch p.mode {
+	case PlaybackModeRepeatAll, PlaybackModeShuffle:
+		if len(p.playlist) == 0 {
+			return false
+		}
+		p.queue = copySongItems(p.playlist)
+		if p.mode == PlaybackModeShuffle {
+			rand.Shuffle(len(p.queue), func(a, b int) {
+				p.queue[a], p.queue[b] = p.queue[b], p.queue[a]
+			})
+		}
+		return p.playNextLocked(recordHistory)
+	default:
+		return false
+	}
+}
+
+func (p *Player) Previous() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(p.history) == 0 {
+		return false
+	}
+	prev := p.history[len(p.history)-1]
+	p.history = p.history[:len(p.history)-1]
+	if p.currentSong != nil {
+		p.queue = append([]SongItem{*p.currentSong}, p.queue...)
+	}
+	return p.playItemLocked(prev, false)
+}
+
+func (p *Player) SetMode(mode PlaybackMode) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.mode = mode
+}
+
+func (p *Player) Mode() PlaybackMode {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.mode
+}
+
+func (p *Player) replayCurrentLocked() bool {
+	if p.currentSong == nil {
+		return false
+	}
+	return p.playItemLocked(*p.currentSong, false)
+}
+
 // CurrentState 返回当前播放状态
 func (p *Player) CurrentState() PlaybackState {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.state
+}
+
+func copySongItems(items []SongItem) []SongItem {
+	out := make([]SongItem, len(items))
+	copy(out, items)
+	return out
 }
 
 // ScheduleResume 延迟后恢复当前曲（用于打断白名单）

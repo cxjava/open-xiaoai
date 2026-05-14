@@ -138,15 +138,27 @@ func (m *Module) handleInstruction(event connect.Event) bool {
 	}
 	normalized := NormalizedForMatch(text)
 
-	// 1. handleUserSpeechInterrupt
-	m.handleUserSpeechInterrupt(normalized)
-
-	// 2. 按优先级：stop > refresh > random > play
+	// 按优先级：stop > next/previous > modes > refresh > random > play
 	if m.matchExact(normalized, m.config.Commands.StopKeywords) {
 		m.player.ClearQueue()
 		_ = m.player.Stop()
 		m.player.Speak("好的，已停止")
 		return true
+	}
+	if m.matchExact(normalized, m.config.Commands.NextKeywords) {
+		return m.handleNext()
+	}
+	if m.matchExact(normalized, m.config.Commands.PreviousKeywords) {
+		return m.handlePrevious()
+	}
+	if m.matchExact(normalized, m.config.Commands.RepeatOneKeywords) {
+		return m.handlePlaybackMode(PlaybackModeRepeatOne, "已切换到单曲循环")
+	}
+	if m.matchExact(normalized, m.config.Commands.RepeatAllKeywords) {
+		return m.handlePlaybackMode(PlaybackModeRepeatAll, "已切换到全部循环")
+	}
+	if m.matchExact(normalized, m.config.Commands.ShuffleModeKeywords) {
+		return m.handlePlaybackMode(PlaybackModeShuffle, "已切换到随机播放")
 	}
 	if m.matchExact(normalized, m.config.Commands.RefreshKeywords) {
 		return m.handleRefresh(text)
@@ -158,6 +170,7 @@ func (m *Module) handleInstruction(event connect.Event) bool {
 	if keyword != "" {
 		return m.handlePlay(keyword)
 	}
+	m.handleUserSpeechInterrupt(normalized)
 	return false
 }
 
@@ -228,6 +241,28 @@ func (m *Module) handlePlay(keyword string) bool {
 		m.player.Speak(fmt.Sprintf("好的，找到%d首歌曲", len(items)))
 	}
 	m.player.SetQueue(items)
+	return true
+}
+
+func (m *Module) handleNext() bool {
+	if m.player.Next() {
+		return true
+	}
+	m.player.Speak("没有下一首")
+	return true
+}
+
+func (m *Module) handlePrevious() bool {
+	if m.player.Previous() {
+		return true
+	}
+	m.player.Speak("已经是第一首")
+	return true
+}
+
+func (m *Module) handlePlaybackMode(mode PlaybackMode, message string) bool {
+	m.player.SetMode(mode)
+	m.player.Speak(message)
 	return true
 }
 

@@ -105,7 +105,7 @@ var episodeRegex = regexp.MustCompile(`(?:第)?(\d+)[集回]?`)
 //	「水浒传第5集」-> {SeriesName:"水浒传", Episode:5}
 //	「许嵩」-> {SeriesName:"许嵩", Episode:0}
 func ParsePlayIntent(keyword string) PlayIntent {
-	keyword = Normalize(keyword)
+	keyword = NormalizePlayKeyword(keyword)
 	norm := NormalizedForMatch(keyword)
 	if norm == "" {
 		return PlayIntent{}
@@ -121,6 +121,20 @@ func ParsePlayIntent(keyword string) PlayIntent {
 		seriesPart = keyword
 	}
 	return PlayIntent{SeriesName: seriesPart, Episode: epNum}
+}
+
+var playResourcePrefixes = []string{"本地歌曲", "本地音乐", "歌曲", "音乐", "故事", "有声书"}
+
+func NormalizePlayKeyword(keyword string) string {
+	keyword = Normalize(keyword)
+	norm := NormalizedForMatch(keyword)
+	for _, prefix := range playResourcePrefixes {
+		prefixNorm := NormalizedForMatch(prefix)
+		if strings.HasPrefix(norm, prefixNorm) {
+			return Normalize(strings.TrimSpace(keyword[len(prefix):]))
+		}
+	}
+	return keyword
 }
 
 func parseInt(s string) int {

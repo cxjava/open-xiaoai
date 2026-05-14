@@ -22,21 +22,33 @@ func (i *Indexer) Search(keyword string, maxResults int) []IndexedSong {
 	copy(songs, i.songs)
 	i.mu.RUnlock()
 
-	matched := make([]IndexedSong, 0, min(len(songs), maxResults))
+	type scoredSong struct {
+		song  IndexedSong
+		score int
+	}
+	matched := make([]scoredSong, 0, min(len(songs), maxResults))
 	for _, s := range songs {
-		if containsAny(s, kw) {
-			matched = append(matched, s)
+		score := searchScore(s, kw)
+		if score > 0 {
+			matched = append(matched, scoredSong{song: s, score: score})
 		}
 	}
 
-	rand.Shuffle(len(matched), func(a, b int) {
-		matched[a], matched[b] = matched[b], matched[a]
+	sort.SliceStable(matched, func(a, b int) bool {
+		if matched[a].score != matched[b].score {
+			return matched[a].score > matched[b].score
+		}
+		return matched[a].song.Path < matched[b].song.Path
 	})
 
 	if len(matched) > maxResults {
 		matched = matched[:maxResults]
 	}
-	return matched
+	out := make([]IndexedSong, len(matched))
+	for idx, item := range matched {
+		out[idx] = item.song
+	}
+	return out
 }
 
 // Random 随机取 N 首
@@ -68,11 +80,70 @@ func (i *Indexer) Random(n int) []IndexedSong {
 }
 
 func containsAny(s IndexedSong, kw string) bool {
-	return strings.Contains(s.NameLower, kw) ||
-		strings.Contains(s.TitleLower, kw) ||
-		strings.Contains(s.ArtistLower, kw) ||
-		strings.Contains(s.AlbumLower, kw) ||
-		strings.Contains(strings.ToLower(s.Path), kw)
+	return searchScore(s, kw) > 0
+}
+
+func searchScore(s IndexedSong, kw string) int {
+	kw = strings.ToLower(strings.TrimSpace(kw))
+	if kw == "" {
+		return 0
+	}
+	name := strings.ToLower(s.NameLower)
+	title := strings.ToLower(s.TitleLower)
+	artist := strings.ToLower(s.ArtistLower)
+	album := strings.ToLower(s.AlbumLower)
+	path := strings.ToLower(s.Path)
+
+	switch {
+	case title == kw:
+		return 1000
+	case name == kw:
+		return 950
+	case artist != "" && title != "" && compact(artist+title) == compact(kw):
+		return 900
+	case artist != "" && title != "" && compact(title+artist) == compact(kw):
+		return 880
+	case strings.Contains(title, kw):
+		return 800
+	case strings.Contains(name, kw):
+		return 750
+	case artist != "" && title != "" && strings.Contains(compact(artist+title), compact(kw)):
+		return 700
+	case artist != "" && title != "" && allQueryPartsMatch(kw, []string{artist, title, album, name}):
+		return 650
+	case strings.Contains(artist, kw):
+		return 500
+	case strings.Contains(album, kw):
+		return 400
+	case strings.Contains(path, kw):
+		return 100
+	default:
+		return 0
+	}
+}
+
+func compact(s string) string {
+	return strings.ReplaceAll(strings.ToLower(strings.TrimSpace(s)), " ", "")
+}
+
+func allQueryPartsMatch(query string, fields []string) bool {
+	parts := strings.Fields(query)
+	if len(parts) == 0 {
+		return false
+	}
+	for _, part := range parts {
+		matched := false
+		for _, field := range fields {
+			if strings.Contains(field, part) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
 }
 
 // SearchEpisode 按系列名和集数搜索，用于故事/有声书
