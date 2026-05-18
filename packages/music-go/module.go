@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -18,11 +21,17 @@ type Module struct {
 	indexer      *Indexer
 	fileSrv      *FileServer
 	player       *Player
+	lx           lxResolver
 	ctx          context.Context
 	cancel       context.CancelFunc
 	refreshWg    sync.WaitGroup
 	refreshingMu sync.Mutex
 	refreshing   bool
+}
+
+type lxResolver interface {
+	Resolve(ctx context.Context, keyword string) (*LXTrack, error)
+	Download(ctx context.Context, track *LXTrack, targetPath string) error
 }
 
 // New 创建音乐模块
@@ -31,11 +40,16 @@ func New(cfg *MusicConfig) *Module {
 		return nil
 	}
 	cfg.ApplyDefaults()
+	var lx lxResolver
+	if cfg.LX.Enabled && cfg.LX.BaseURL != "" {
+		lx = NewLXClient(&cfg.LX)
+	}
 	return &Module{
 		config:  cfg,
 		indexer: NewIndexer(cfg),
 		fileSrv: NewFileServer(&cfg.HTTP),
 		player:  nil, // 在 Start 时初始化，依赖 fileSrv 和 indexer
+		lx:      lx,
 	}
 }
 
@@ -232,7 +246,8 @@ func (m *Module) extractPlayKeyword(text string) string {
 }
 
 func (m *Module) handlePlay(keyword string) bool {
-	if len(m.config.Dirs) == 0 {
+	hasLocalDirs := len(m.config.Dirs) > 0
+	if !hasLocalDirs && m.lx == nil {
 		log.Printf("⚠️ [music] handlePlay 中止: dirs 未配置")
 		m.player.Speak("本地音乐目录还没有配置")
 		return true
@@ -243,13 +258,18 @@ func (m *Module) handlePlay(keyword string) bool {
 		keyword, intent.SeriesName, intent.Episode, useEpisode)
 
 	var songs []IndexedSong
-	if useEpisode {
+	if !hasLocalDirs {
+		songs = nil
+	} else if useEpisode {
 		songs = m.indexer.SearchEpisode(intent.SeriesName, intent.Episode, m.config.Search.MaxResults)
 	} else {
 		songs = m.indexer.Search(intent.SeriesName, m.config.Search.MaxResults)
 	}
 	if len(songs) == 0 {
 		log.Printf("🔍 [music] 搜索无结果: series=%q episode=%d", intent.SeriesName, intent.Episode)
+		if !useEpisode && m.handleLXPlay(intent.SeriesName) {
+			return true
+		}
 		m.player.Speak(fmt.Sprintf("没有找到包含%s的歌曲", intent.SeriesName))
 		return true
 	}
@@ -282,6 +302,99 @@ func (m *Module) handlePlay(keyword string) bool {
 
 	m.player.SetQueue(items)
 	return true
+}
+
+func (m *Module) handleLXPlay(keyword string) bool {
+	if m.lx == nil {
+		return false
+	}
+	ctx := m.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	track, err := m.lx.Resolve(ctx, keyword)
+	if err != nil {
+		log.Printf("⚠️ [music/lx] 在线搜索失败: keyword=%q err=%v", keyword, err)
+		return false
+	}
+	if track == nil || track.URL == "" {
+		log.Printf("⚠️ [music/lx] 在线搜索未返回可播放 URL: keyword=%q", keyword)
+		return false
+	}
+
+	if m.config.Commands.AbortXiaoAIOnPlay != nil && *m.config.Commands.AbortXiaoAIOnPlay {
+		_ = m.player.AbortXiaoAI()
+	}
+	name := track.Name
+	if name == "" {
+		name = keyword
+	}
+	if m.config.LX.Download {
+		if item, ok := m.downloadLXTrack(ctx, track, name); ok {
+			_ = m.player.Speak(fmt.Sprintf("好的，已下载在线歌曲%s", name))
+			m.player.SetQueue([]SongItem{item})
+			return true
+		}
+	}
+	_ = m.player.Speak(fmt.Sprintf("好的，找到在线歌曲%s", name))
+	m.player.SetQueue([]SongItem{{
+		Path: fmt.Sprintf("lx:%s-%s", track.Singer, name),
+		URL:  track.URL,
+	}})
+	return true
+}
+
+func (m *Module) downloadLXTrack(ctx context.Context, track *LXTrack, fallbackName string) (SongItem, bool) {
+	if m.lx == nil || m.fileSrv == nil {
+		return SongItem{}, false
+	}
+	dir := strings.TrimSpace(m.config.LX.DownloadDir)
+	if dir == "" && len(m.config.Dirs) > 0 {
+		dir = m.config.Dirs[0]
+	}
+	if dir == "" {
+		log.Printf("⚠️ [music/lx] download_dir 和 music.dirs 均为空，无法下载")
+		return SongItem{}, false
+	}
+	name := track.Name
+	if name == "" {
+		name = fallbackName
+	}
+	filename := sanitizeMusicFilename(fmt.Sprintf("%s - %s.mp3", name, track.Singer))
+	if track.Singer == "" {
+		filename = sanitizeMusicFilename(name + ".mp3")
+	}
+	targetPath := filepath.Join(dir, filename)
+	if _, err := os.Stat(targetPath); err == nil {
+		log.Printf("🌐 [music/lx] downloaded file exists, reuse: %s", targetPath)
+	} else {
+		if err := m.lx.Download(ctx, track, targetPath); err != nil {
+			log.Printf("⚠️ [music/lx] 下载失败: target=%s err=%v", targetPath, err)
+			return SongItem{}, false
+		}
+	}
+	if err := m.indexer.Refresh(); err != nil {
+		log.Printf("⚠️ [music/lx] 下载后刷新曲库失败: %v", err)
+	}
+	m.fileSrv.AllowFile(targetPath)
+	url := m.fileSrv.CreateFileURL(targetPath)
+	if url == "" {
+		log.Printf("⚠️ [music/lx] 下载文件 URL 生成失败: %s", targetPath)
+		return SongItem{}, false
+	}
+	log.Printf("🌐 [music/lx] local downloaded url: %s", url)
+	return SongItem{Path: targetPath, URL: url}, true
+}
+
+var unsafeFilenameChars = regexp.MustCompile(`[\\/:*?"<>|]+`)
+
+func sanitizeMusicFilename(name string) string {
+	name = unsafeFilenameChars.ReplaceAllString(name, "_")
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "lx-music.mp3"
+	}
+	return name
 }
 
 func (m *Module) handleNext() bool {

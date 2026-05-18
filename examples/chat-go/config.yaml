@@ -78,6 +78,23 @@ custom_replies:
 #   enabled: true
 #   dirs:
 #     - /path/to/music
+#   lx:
+#     enabled: true
+#     base_url: "http://localhost:9527"
+#     # 推荐使用普通用户 token，或配置 username/password 自动登录获取 token
+#     user_token: ""
+#     username: "your_lx_user"
+#     password: "your_lx_password"
+#     # 可选：管理员鉴权；不建议日常播放依赖 admin 口令
+#     frontend_auth: ""
+#     # true 时通过 LX 代理下载到本地后播放；false 时直接播放 LX 返回的远程 URL
+#     download: false
+#     # 空则下载到 music.dirs[0]
+#     download_dir: ""
+#     # LX 音源：kw=酷我，tx=QQ音乐，wy=网易云，kg=酷狗，mg=咪咕
+#     source: "kw"
+#     # 128k / 320k / flac，取决于源和歌曲
+#     quality: "128k" 
 #   commands:
 #     # 默认 true：播放本地歌曲前打断小爱云端 NLP，避免云端试听版 URL 覆盖本地播放
 #     abort_xiaoai_on_play: true

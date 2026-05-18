@@ -108,6 +108,8 @@ type Player struct {
 	fileServer  *FileServer
 	indexer     *Indexer
 	playURL     func(url string) error
+	speak       func(text string) error
+	abortXiaoAI func() error
 
 	// lastPlayURLAt 上次主动 PlayURL 的时间戳，用于 grace period 内过滤 Idle 误报
 	lastPlayURLAt time.Time
@@ -177,7 +179,7 @@ func (p *Player) PlayURL(url string) error {
 	log.Printf("🌐 [music/player] PlayURL → 设备: %s", url)
 	script := fmt.Sprintf(
 		// `ubus -t 1 call mediaplayer player_wakeup '{"action":"stop"}' >/dev/null 2>&1 ; `+
-			`ubus -t 2 call mediaplayer player_play_operation '{"action":"play","media":"common"}' >/dev/null 2>&1 ; `+
+		`ubus -t 2 call mediaplayer player_play_operation '{"action":"play","media":"common"}' >/dev/null 2>&1 ; `+
 			`sleep 0.1 ; `+
 			`ubus -t 5 call mediaplayer player_play_url '{"url":"%s","type":1}' || true`,
 		url,
@@ -233,6 +235,9 @@ func shellEscapeSingle(s string) string {
 //
 // 在这次重构之前，tts_play.sh 阻塞会把 read loop 也一起卡住，导致后续 RPC 全部超时。
 func (p *Player) Speak(text string) error {
+	if p.speak != nil {
+		return p.speak(text)
+	}
 	log.Printf("📝 [music/player] Speak: %q", text)
 	p.extendSuppress(speakSuppressPrefix)
 
@@ -280,6 +285,9 @@ var stopTTSTimeoutMs uint64 = 1500
 //
 // fire-and-forget：调用方不等待结果，失败也无所谓。
 func (p *Player) AbortXiaoAI() error {
+	if p.abortXiaoAI != nil {
+		return p.abortXiaoAI()
+	}
 	log.Printf("🔇 [music/player] AbortXiaoAI: 重启 mico_aivs_lab 杀云端 NLP")
 	timeout := uint64(3000)
 	_, err := connect.GetRPC().CallRemote(

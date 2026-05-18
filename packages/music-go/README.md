@@ -65,6 +65,21 @@ music:
     port: 18080
     base_url: ""                 # 空则自动检测 LAN IP，多网卡时建议显式配置
 
+  # LX Sync Server 在线音乐（可选）
+  # 本地曲库搜不到时，调用 LX Server 搜索并获取播放直链
+  lx:
+    enabled: false
+    base_url: "http://localhost:9527"
+    user_token: ""               # 推荐：LX 普通用户 API Token（x-user-token）
+    username: ""                 # 可选：普通用户名；未配置 user_token 时自动登录获取 token
+    password: ""                 # 可选：普通用户密码；日志不会打印此值
+    frontend_auth: ""            # 可选：admin 管理口令；不建议日常播放依赖
+    download: false              # true=通过 LX 代理下载到本地后播放，false=直接播放远程 URL
+    download_dir: ""             # 下载目录；空则使用 music.dirs[0]
+    source: "kw"                 # kw / tx / wy / kg / mg
+    quality: "128k"              # 128k / 320k / flac，取决于源和歌曲
+    timeout_sec: 10
+
   # 故事/有声书分类（可选），用于精确匹配与集数解析
   stories:
     - name: "西游记"
@@ -137,6 +152,74 @@ music:
 | 停止 / 暂停 / 闭嘴 | 清空队列并停止 |
 | 刷新曲库 | 重新扫描目录并更新索引 |
 
+### LX Sync Server 在线兜底
+
+LX Sync Server 项目地址：[XCQ0607/lxserver](https://github.com/XCQ0607/lxserver)。
+
+启用 `music.lx.enabled` 后，`播放某首歌` 会先搜索本地曲库；如果本地没有命中且不是故事/有声书集数播放，就会调用 LX Sync Server：
+
+1. `GET /api/music/search?name={keyword}&source={source}&type=song&page=1&pages=1`
+2. `POST /api/music/url`，请求体为 `{"songInfo": <第一条搜索结果>, "quality": "128k"}`
+3. 将返回的 `url` 交给小爱设备播放
+
+示例：
+
+```yaml
+music:
+  enabled: true
+  lx:
+    enabled: true
+    base_url: "http://localhost:9527"
+    username: "your_lx_user"
+    password: "your_lx_password"
+    download: true
+    download_dir: ""  # 空则下载到 music.dirs[0]
+    source: "kw"
+    quality: "128k"
+```
+
+如果已经在 LX Server 面板里生成了普通用户 API Token，优先使用：
+
+```yaml
+music:
+  lx:
+    enabled: true
+    base_url: "http://localhost:9527"
+    user_token: "lx_tk_xxx"
+```
+
+运行时会打印 LX 搜索请求、搜索返回摘要、取直链请求、取直链返回摘要以及最终远程播放 URL；日志会隐藏登录 token，也不会打印密码。
+
+启用 `download: true` 后，在线歌曲会通过 LX 的 `/api/music/download` 代理下载到本地，默认保存为 `歌名 - 歌手.mp3`。如果文件已存在会直接复用并播放本地文件，下载后会刷新曲库索引，后续本地搜索可以直接命中。
+
+#### 本地优先与远程触发规则
+
+`music-go` 永远先搜本地曲库。只要本地有任何命中，就直接播放本地结果，不会触发 LX 远程搜索或下载。
+
+例如本地还没有下载《稻香》时，可以说：
+
+```text
+播放周杰伦的稻香
+```
+
+本地找不到后，会用「周杰伦的稻香」去 LX 远程搜索；如果 `download: true`，会先下载到本地目录再播放。
+
+如果已经下载过《稻香》，就需要用本地能精确命中的歌名或歌手名来播放：
+
+```text
+播放稻香
+```
+
+这时本地曲库能找到《稻香》，会直接播放本地文件，不会再访问 LX。
+
+如果你说：
+
+```text
+播放周杰伦
+```
+
+只要本地曲库里有周杰伦的歌曲，就会播放本地搜索到的周杰伦歌曲列表，也不会触发远程下载。只有本地完全没有命中时，才会进入 LX 远程兜底。
+
 ---
 
 ## 播报文案
@@ -164,7 +247,7 @@ music:
 
 ## 集成方式
 
-在父模块（chat-go / gemini-go）中：
+在父模块（chat-go）中：
 
 ```go
 // 1. 在 config 结构体中增加 Music 字段

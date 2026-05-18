@@ -8,6 +8,7 @@ type MusicConfig struct {
 	Search     SearchConfig   `yaml:"search"`
 	Commands   CommandsConfig `yaml:"commands"`
 	HTTP       HTTPConfig     `yaml:"http"`
+	LX         LXConfig       `yaml:"lx"`
 	Stories    []StoryConfig  `yaml:"stories"` // 故事/有声书分类，用于精确匹配与集数解析
 }
 
@@ -50,6 +51,21 @@ type HTTPConfig struct {
 	BaseURL string `yaml:"base_url"`
 }
 
+// LXConfig LX Sync Server 在线音乐配置
+type LXConfig struct {
+	Enabled      bool   `yaml:"enabled"`
+	BaseURL      string `yaml:"base_url"`
+	FrontendAuth string `yaml:"frontend_auth"`
+	UserToken    string `yaml:"user_token"`
+	Username     string `yaml:"username"`
+	Password     string `yaml:"password"`
+	Download     bool   `yaml:"download"`
+	DownloadDir  string `yaml:"download_dir"`
+	Source       string `yaml:"source"`
+	Quality      string `yaml:"quality"`
+	TimeoutSec   int    `yaml:"timeout_sec"`
+}
+
 // DefaultExtensions 默认支持的音频扩展名
 var DefaultExtensions = []string{".mp3", ".flac", ".wav", ".m4a", ".aac", ".ogg"}
 
@@ -80,6 +96,15 @@ func (c *MusicConfig) ApplyDefaults() {
 	}
 	if c.Search.IndexFile == "" {
 		c.Search.IndexFile = "cache/music_index.json"
+	}
+	if c.LX.Source == "" {
+		c.LX.Source = "kw"
+	}
+	if c.LX.Quality == "" {
+		c.LX.Quality = "128k"
+	}
+	if c.LX.TimeoutSec <= 0 {
+		c.LX.TimeoutSec = 10
 	}
 	if len(c.Commands.PlayKeywords) == 0 {
 		c.Commands.PlayKeywords = make([]string, len(DefaultCommands.PlayKeywords))

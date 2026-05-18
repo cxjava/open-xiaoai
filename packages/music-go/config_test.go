@@ -13,6 +13,24 @@ func TestApplyDefaultsAddsPlaybackControlKeywords(t *testing.T) {
 	assertContains(t, cfg.Commands.ShuffleModeKeywords, "随机播放")
 }
 
+func TestApplyDefaultsAddsLXDefaults(t *testing.T) {
+	var cfg MusicConfig
+	cfg.ApplyDefaults()
+
+	if cfg.LX.Source != "kw" {
+		t.Fatalf("expected default LX source kw, got %q", cfg.LX.Source)
+	}
+	if cfg.LX.Quality != "128k" {
+		t.Fatalf("expected default LX quality 128k, got %q", cfg.LX.Quality)
+	}
+	if cfg.LX.TimeoutSec != 10 {
+		t.Fatalf("expected default LX timeout 10, got %d", cfg.LX.TimeoutSec)
+	}
+	if cfg.LX.Download {
+		t.Fatal("expected LX download to be disabled by default")
+	}
+}
+
 func assertContains(t *testing.T, values []string, want string) {
 	t.Helper()
 	for _, v := range values {

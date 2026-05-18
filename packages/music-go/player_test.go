@@ -1,6 +1,9 @@
 package music
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func newTestPlayer(t *testing.T) (*Player, *[]string) {
 	t.Helper()
@@ -8,6 +11,7 @@ func newTestPlayer(t *testing.T) (*Player, *[]string) {
 	p := NewPlayer(nil, nil)
 	p.playURL = func(url string) error {
 		played = append(played, url)
+		p.lastPlayURLAt = time.Now().Add(-playGracePeriod)
 		return nil
 	}
 	return p, &played
