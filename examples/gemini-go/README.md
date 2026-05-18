@@ -9,8 +9,9 @@
 - **实时音频（Gemini Live）**：16kHz PCM 输入 → Gemini 推理 → 24kHz PCM 输出，无需 TTS
 - **自动 VAD**：由 Gemini 服务端处理，无需本地模型
 - **回声抑制**：AI 说话时不转发麦克风输入，避免回声
-- **关键词/唤醒词打断**：仅当配置的关键词或唤醒词匹配时才触发打断
 - **单二进制**：无 Python/Rust 依赖，`go build` 即部署
+
+> ✋ **半双工模式**：AI 说话期间 mic 会被屏蔽，**无法中途打断**当前回答，需等 AI 说完再开口。若需打断/关键词等更丰富的语义功能，请使用 [chat-go](../chat-go/README.md)。
 
 ## 快速开始
 
@@ -33,7 +34,7 @@ bash build.sh
 vim config.yaml
 ```
 
-修改 `gemini.api_key`（或使用环境变量 `GEMINI_API_KEY`），以及 `interrupt.keywords` 等。
+修改 `gemini.api_key`（或使用环境变量 `GEMINI_API_KEY`）即可。
 
 ### 3. 运行
 
@@ -63,7 +64,7 @@ vim config.yaml
 | 构建 | uv + maturin + Rust + PyO3 | `go build` |
 | 部署 | Python 环境 + .so | 单二进制 (~13MB) |
 | 依赖 | google-genai + numpy | google.golang.org/genai |
-| 打断 | 不支持 | 支持（instruction 事件） |
+| 打断 | 不支持 | 不支持（半双工） |
 | FFI | PyO3 桥接 | 无 |
 
 ## 配置说明
@@ -71,29 +72,15 @@ vim config.yaml
 | 配置项 | 说明 |
 |--------|------|
 | `server.host` / `server.port` | 服务端监听地址和端口 |
-| `auth.username` / `auth.password` | WebSocket 认证（为空则跳过） |
+| `auth.users` | WebSocket 认证（为空则跳过） |
+| `proxy` | HTTP/SOCKS5 代理（直连 Google 失败时配置） |
 | `gemini.api_key` | API 密钥（环境变量 `GEMINI_API_KEY` 优先） |
 | `gemini.model` | 模型名称 |
 | `gemini.system_instruction` | 系统提示词 |
 | `gemini.speech.language` / `voice` | 语音合成配置 |
-| `interrupt.keywords` | 打断触发的关键词列表 |
-| `interrupt.match_mode` | 匹配模式：exact / prefix / contains |
-| `interrupt.kws_interrupt` | 唤醒词是否触发打断 |
 | `greeting` | 连接成功后播放的提示语 |
-
-## 本地音乐
-
-已集成 [music-go](../../packages/music-go/README.md)。在 `config.yaml` 中启用：
-
-```yaml
-music:
-  enabled: true
-  dirs:
-    - /path/to/music
-```
-
-支持「播放许嵩」「随便听听」「停止播放」等语音指令。连接感知 base_url 已启用，音乐 URL 会根据客户端连接方式（LAN 或 Tailscale）自动选择 host。详见 [connection-aware-base-url-design](../../docs/connection-aware-base-url-design.md)。
 
 ## 注意事项
 
-- **打断机制**：仅当 instruction 匹配 `interrupt.keywords` 或 kws 事件且 `kws_interrupt=true` 时触发，与 chat-go 配置统一。
+- **半双工，无法中途打断**：AI 说话期间 mic 会被屏蔽（避免回声），需等 AI 说完再开口。
+- **不集成本地音乐模块**：gemini-go 设计成纯实时对话场景；如需本地音乐播放，请使用 [chat-go](../chat-go/README.md)。

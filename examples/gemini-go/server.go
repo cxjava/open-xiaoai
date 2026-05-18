@@ -17,7 +17,6 @@ import (
 	"github.com/cxjava/open-xiaoai/packages/client-go/services/audio"
 	"github.com/cxjava/open-xiaoai/packages/client-go/services/connect"
 	"github.com/cxjava/open-xiaoai/packages/client-go/utils"
-	"github.com/cxjava/open-xiaoai/packages/music-go"
 )
 
 func parseBasicAuth(r *http.Request) (username, password string, ok bool) {
@@ -36,62 +35,10 @@ func parseBasicAuth(r *http.Request) (username, password string, ok bool) {
 	return pair[0], pair[1], true
 }
 
-// instructionEventData is the payload of instruction event from client (FileMonitorEvent).
-type instructionEventData struct {
-	Type string `json:"Type"`
-	Line string `json:"Line"`
-}
-
-// instructionLogLine is one line from instruction.log (SpeechRecognizer result).
-type instructionLogLine struct {
-	Header struct {
-		Namespace string `json:"namespace"`
-		Name      string `json:"name"`
-	} `json:"header"`
-	Payload struct {
-		IsFinal bool `json:"is_final"`
-		Results []struct {
-			Text string `json:"text"`
-		} `json:"results"`
-	} `json:"payload"`
-}
-
-// parseInstructionUserText extracts final user speech text from instruction event.
-// Returns non-empty string only when IsFinal and text is present.
-func parseInstructionUserText(data json.RawMessage) string {
-	var ev instructionEventData
-	if err := json.Unmarshal(data, &ev); err != nil || ev.Type != "NewLine" || ev.Line == "" {
-		return ""
-	}
-	var msg instructionLogLine
-	if err := json.NewDecoder(strings.NewReader(ev.Line)).Decode(&msg); err != nil {
-		return ""
-	}
-	if !strings.EqualFold(msg.Header.Namespace, "SpeechRecognizer") ||
-		!strings.EqualFold(msg.Header.Name, "RecognizeResult") {
-		return ""
-	}
-	if !msg.Payload.IsFinal || len(msg.Payload.Results) == 0 {
-		return ""
-	}
-	return strings.TrimSpace(msg.Payload.Results[0].Text)
-}
-
 // onRecordStream is set by main to route incoming audio to Gemini.
 var onRecordStream func(data []byte)
 
-// onUserInterrupt is called when user speaks (instruction event) and text matches interrupt keywords.
-// Main sets it to: stop playback, allow mic through, and send text to Gemini for interrupt.
-var onUserInterrupt func(userText string)
-
-// onKwsInterrupt is called when kws event fires and kws_interrupt is enabled.
-// Main sets it to: stop playback, allow mic through (no text sent to Gemini).
-var onKwsInterrupt func()
-
-// OnConnectionHost 连接建立时回调，传入客户端使用的 host（来自 r.Host），用于设置音乐 base_url 等
-type OnConnectionHost func(host string)
-
-func startServer(ctx context.Context, cfg *AppConfig, onConnectionHost OnConnectionHost, musicModule *music.Module) error {
+func startServer(ctx context.Context, cfg *AppConfig) error {
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -120,7 +67,7 @@ func startServer(ctx context.Context, cfg *AppConfig, onConnectionHost OnConnect
 			log.Printf("❌ WebSocket accept: %v", err)
 			return
 		}
-		handleConnection(conn, r, cfg, onConnectionHost, musicModule)
+		handleConnection(conn, r, cfg)
 	})
 
 	server := &http.Server{Handler: mux}
@@ -132,9 +79,9 @@ func startServer(ctx context.Context, cfg *AppConfig, onConnectionHost OnConnect
 	return server.Serve(listener)
 }
 
-func handleConnection(conn *websocket.Conn, r *http.Request, cfg *AppConfig, onConnectionHost OnConnectionHost, musicModule *music.Module) {
+func handleConnection(conn *websocket.Conn, r *http.Request, cfg *AppConfig) {
 	log.Printf("✅ 已连接: %s", r.RemoteAddr)
-	initConnection(conn, r, cfg, onConnectionHost, musicModule)
+	initConnection(conn, cfg)
 
 	if err := connect.GetMessageManager().ProcessMessages(); err != nil {
 		log.Printf("❌ 消息处理异常: %v", err)
@@ -144,35 +91,13 @@ func handleConnection(conn *websocket.Conn, r *http.Request, cfg *AppConfig, onC
 	log.Printf("❌ 已断开连接: %s", r.RemoteAddr)
 }
 
-func initConnection(conn *websocket.Conn, r *http.Request, cfg *AppConfig, onConnectionHost OnConnectionHost, musicModule *music.Module) {
+func initConnection(conn *websocket.Conn, cfg *AppConfig) {
 	connect.GetMessageManager().Init(conn)
-
-	// 连接感知 base_url：客户端用哪个 host 连上来，就用同一 host 拼音乐 URL（支持 LAN/Tailscale）
-	if onConnectionHost != nil && r.Host != "" {
-		host, _, err := net.SplitHostPort(r.Host)
-		if err != nil {
-			host = r.Host
-		}
-		if host != "" {
-			onConnectionHost(host)
-		}
-	}
 
 	connect.GetHandlers().SetEventHandler(func(event connect.Event) error {
 		log.Printf("🔥 收到 Event: %s", event.Event)
-		// 音乐模块优先：播放/停止/刷新等指令由音乐处理，不交给 AI
-		if musicModule != nil && musicModule.OnEvent(event) {
-			return nil
-		}
-		if event.Event == "instruction" && onUserInterrupt != nil && event.Data != nil {
-			text := parseInstructionUserText(*event.Data)
-			if text != "" && cfg.ShouldInterrupt(text) {
-				go onUserInterrupt(text)
-			}
-		}
-		if event.Event == "kws" && cfg.Interrupt.KwsInterrupt && onKwsInterrupt != nil {
-			go onKwsInterrupt()
-		}
+		// gemini-go 半双工模式：instruction/kws 事件在此被忽略，
+		// 麦克风音频通过 onRecordStream → Gemini Live 处理。
 		return nil
 	})
 	connect.GetHandlers().SetStreamHandler(func(stream connect.Stream) error {
@@ -198,25 +123,35 @@ func initConnection(conn *websocket.Conn, r *http.Request, cfg *AppConfig, onCon
 		if greeting == "" {
 			greeting = "已连接"
 		}
-		rpc.CallRemote("run_shell", "/usr/sbin/tts_play.sh '"+greeting+"'", nil)
+		if _, err := rpc.CallRemote("run_shell", "/usr/sbin/tts_play.sh '"+greeting+"'", nil); err != nil {
+			log.Printf("⚠️ greeting tts_play failed: %v", err)
+		}
 
-		rpc.CallRemote("start_recording", audio.AudioConfig{
+		if _, err := rpc.CallRemote("start_recording", audio.AudioConfig{
 			PCM:           "noop",
 			Channels:      1,
 			BitsPerSample: 16,
 			SampleRate:    16000,
 			PeriodSize:    1440 / 4,
 			BufferSize:    1440,
-		}, nil)
+		}, nil); err != nil {
+			log.Printf("❌ start_recording failed: %v", err)
+		} else {
+			log.Println("🎙️ start_recording OK (16kHz mono)")
+		}
 
-		rpc.CallRemote("start_play", audio.AudioConfig{
+		if _, err := rpc.CallRemote("start_play", audio.AudioConfig{
 			PCM:           "noop",
 			Channels:      1,
 			BitsPerSample: 16,
 			SampleRate:    24000,
 			PeriodSize:    1440 / 4,
 			BufferSize:    1440,
-		}, nil)
+		}, nil); err != nil {
+			log.Printf("❌ start_play failed: %v", err)
+		} else {
+			log.Println("🔈 start_play OK (24kHz mono)")
+		}
 	}()
 }
 

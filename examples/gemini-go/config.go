@@ -3,9 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 
-	"github.com/cxjava/open-xiaoai/packages/music-go"
 	"gopkg.in/yaml.v3"
 )
 
@@ -37,30 +35,16 @@ type GeminiConfig struct {
 	Speech            GeminiSpeechConfig `yaml:"speech"`
 }
 
-// InterruptConfig 打断配置：仅当关键词或唤醒词匹配时才打断（与 chat-go 统一）
-type InterruptConfig struct {
-	Keywords     []string `yaml:"keywords"`      // 关键词列表
-	MatchMode    string   `yaml:"match_mode"`    // exact, prefix, contains
-	KwsInterrupt bool     `yaml:"kws_interrupt"` // 唤醒词(kws事件)也触发打断
-}
-
 type AppConfig struct {
-	Server    ServerConfig      `yaml:"server"`
-	Auth      AuthConfig        `yaml:"auth"`
-	Proxy     string            `yaml:"proxy"` // HTTP/SOCKS5 代理，如 http://127.0.0.1:7890
-	Gemini    GeminiConfig      `yaml:"gemini"`
-	Interrupt InterruptConfig   `yaml:"interrupt"`
-	Greeting  string            `yaml:"greeting"`
-	Music     music.MusicConfig `yaml:"music"`
+	Server   ServerConfig `yaml:"server"`
+	Auth     AuthConfig   `yaml:"auth"`
+	Proxy    string       `yaml:"proxy"` // HTTP/SOCKS5 代理，如 http://127.0.0.1:7890
+	Gemini   GeminiConfig `yaml:"gemini"`
+	Greeting string       `yaml:"greeting"`
 }
 
-func loadConfig(path string) (*AppConfig, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read config: %w", err)
-	}
-
-	cfg := &AppConfig{
+func defaultConfig() *AppConfig {
+	return &AppConfig{
 		Server: ServerConfig{
 			Host: "0.0.0.0",
 			Port: 4399,
@@ -73,13 +57,17 @@ func loadConfig(path string) (*AppConfig, error) {
 				Voice:    "Leda",
 			},
 		},
-		Interrupt: InterruptConfig{
-			Keywords:     []string{"召唤小智", "小智"},
-			MatchMode:    "exact",
-			KwsInterrupt: true,
-		},
 		Greeting: "已连接",
 	}
+}
+
+func loadConfig(path string) (*AppConfig, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read config: %w", err)
+	}
+
+	cfg := defaultConfig()
 
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
@@ -113,39 +101,3 @@ func (c *AppConfig) GetAPIKey() string {
 	return ""
 }
 
-// ShouldInterrupt returns true if userText matches any interrupt keyword.
-func (c *AppConfig) ShouldInterrupt(userText string) bool {
-	text := strings.TrimSpace(userText)
-	if text == "" || len(c.Interrupt.Keywords) == 0 {
-		return false
-	}
-	mode := strings.ToLower(c.Interrupt.MatchMode)
-	if mode == "" {
-		mode = "exact"
-	}
-	for _, kw := range c.Interrupt.Keywords {
-		kw = strings.TrimSpace(kw)
-		if kw == "" {
-			continue
-		}
-		switch mode {
-		case "exact":
-			if text == kw {
-				return true
-			}
-		case "prefix":
-			if strings.HasPrefix(text, kw) {
-				return true
-			}
-		case "contains":
-			if strings.Contains(text, kw) {
-				return true
-			}
-		default:
-			if text == kw {
-				return true
-			}
-		}
-	}
-	return false
-}
