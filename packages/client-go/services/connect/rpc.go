@@ -3,6 +3,7 @@ package connect
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -80,6 +81,10 @@ func (r *RPC) OnResponse(resp Response) {
 	if ok {
 		ch <- resp
 		close(ch)
+	} else {
+		// 正常情况下不应发生：要么是调用方已超时清理掉 ch，要么是注册/发送时序错乱。
+		// 若频繁出现，说明 CallRemote 内 pendingRequests 注册早于响应到达的不变式被破坏。
+		log.Printf("⚠️ [rpc] 收到无匹配 ID 的响应 (id=%s)，已丢弃", resp.ID)
 	}
 }
 
@@ -112,13 +117,20 @@ func (r *RPC) CallRemote(command string, payload interface{}, timeoutMs *uint64)
 		Payload: payloadRaw,
 	}
 
-	if err := sendFn(req); err != nil {
-		return Response{}, err
-	}
-
+	// 必须先注册 pendingRequests 再发送：
+	// 否则 client 端处理极快（如 stop_tts ~27ms）时，response 可能在 ch 注册前到达，
+	// OnResponse 找不到匹配的 channel 会静默丢弃响应，导致 CallRemote 等到超时。
+	// 之前观察到的所有 fast handler RPC 超时（stop_tts/Speak/PlayURL/Stop）均源于此 race。
 	r.mu.Lock()
 	r.pendingRequests[uid] = ch
 	r.mu.Unlock()
+
+	if err := sendFn(req); err != nil {
+		r.mu.Lock()
+		delete(r.pendingRequests, uid)
+		r.mu.Unlock()
+		return Response{}, err
+	}
 
 	ms := uint64(10000)
 	if timeoutMs != nil {

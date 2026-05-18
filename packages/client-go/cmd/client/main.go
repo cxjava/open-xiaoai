@@ -332,15 +332,17 @@ func runShell(req connect.Request) (connect.Response, error) {
 		log.Printf("❌ run_shell error: %v", err)
 		return connect.Response{}, err
 	}
-	log.Printf("🐚 run_shell result: exit_code=%d stdout=%q stderr=%q", res.ExitCode, res.Stdout, res.Stderr)
+	// log.Printf("🐚 run_shell result: exit_code=%d stdout=%q stderr=%q", res.ExitCode, res.Stdout, res.Stderr)
 	data, _ := json.Marshal(res)
 	raw := json.RawMessage(data)
 	return connect.Response{ID: "0", Data: &raw}, nil
 }
 
-func stopTTS(_ connect.Request) (connect.Response, error) {
-	log.Println("⏹️ stop_tts: 终止当前 TTS/播放")
+func stopTTS(req connect.Request) (connect.Response, error) {
+	start := time.Now()
+	log.Printf("⏹️ [rpc] stop_tts 收到 (id=%s): 终止当前 TTS/播放", req.ID)
 	utils.StopTTS()
+	log.Printf("✅ [rpc] stop_tts 完成 (id=%s, 耗时 %v)", req.ID, time.Since(start).Round(time.Millisecond))
 	return connect.SuccessResponse(), nil
 }
 

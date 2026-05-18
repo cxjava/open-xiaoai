@@ -10,10 +10,23 @@ import (
 type EventHandler func(event Event) error
 type StreamHandler func(stream Stream) error
 
+// eventQueueSize event 缓冲队列大小。
+// 实际事件吞吐很低（instruction ~1-2/min，playing 偶发），256 在任何合理场景都够用；
+// 真出现队列满，说明 server 端处理彻底卡死（例如 LLM/网络长时间挂起），此时丢事件比阻塞读循环更安全。
+const eventQueueSize = 256
+
 type MessageHandlers struct {
 	mu            sync.RWMutex
 	eventHandler  EventHandler
 	streamHandler StreamHandler
+
+	// 事件队列 + worker：避免在 WS 读循环里同步调用 OnEvent。
+	// 关键：server 端的 OnEvent 经常会反向 CallRemote（StopTTS/Speak/PlayURL 等），
+	// 这些 RPC 的响应也要走同一个 WS 读循环回来。如果在读循环里同步等响应，
+	// 就会自我死锁：响应在 TCP 缓冲里到了，但读循环卡在 OnEvent 里读不到，直到超时。
+	// 用 worker 解耦后，读循环可以持续读响应，OnEvent 才能正常拿到回包。
+	eventQueue     chan Event
+	eventQueueOnce sync.Once
 }
 
 var (
@@ -26,6 +39,22 @@ func GetHandlers() *MessageHandlers {
 		handlers = &MessageHandlers{}
 	})
 	return handlers
+}
+
+// ensureEventWorker 懒启动事件分发 worker（进程生命周期内只启动一次）。
+func (h *MessageHandlers) ensureEventWorker() {
+	h.eventQueueOnce.Do(func() {
+		h.eventQueue = make(chan Event, eventQueueSize)
+		go h.eventWorker()
+	})
+}
+
+func (h *MessageHandlers) eventWorker() {
+	for event := range h.eventQueue {
+		if err := h.OnEvent(event); err != nil {
+			log.Printf("⚠️ event handler error (%s): %v", event.Event, err)
+		}
+	}
 }
 
 func (h *MessageHandlers) SetEventHandler(handler EventHandler) {
@@ -101,7 +130,15 @@ func (h *MessageHandlers) DispatchText(data []byte, sendFn func(data []byte) err
 	case msg.Response != nil:
 		h.OnResponse(*msg.Response)
 	case msg.Event != nil:
-		return h.OnEvent(*msg.Event)
+		// 必须异步：OnEvent 里可能反向 CallRemote，同步调用会阻塞 WS 读循环并使 RPC 响应超时。
+		// 用单 worker + buffered channel 保证事件按到达顺序串行处理（instruction 之间不会乱序）。
+		h.ensureEventWorker()
+		select {
+		case h.eventQueue <- *msg.Event:
+		default:
+			// 极端情况：worker 卡死或事件爆量。丢弃比阻塞读循环安全。
+			log.Printf("⚠️ event queue 已满 (cap=%d)，丢弃事件: %s", eventQueueSize, msg.Event.Event)
+		}
 	}
 	return nil
 }
