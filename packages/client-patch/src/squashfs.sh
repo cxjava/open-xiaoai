@@ -40,7 +40,7 @@ elif [ "$MODEL" = "LX06" ]; then
     IMAGE_MAX_SIZE=$((0x02800000))
 fi
 
-SIZE=$(stat -L -c %s "$FIRMWARE/root-patched.squashfs")
+SIZE=$(stat -L -f %z "$FIRMWARE/root-patched.squashfs")
 SIZE_MB=$((SIZE / 1024 / 1024))
 IMAGE_MAX_SIZE_MB=$((IMAGE_MAX_SIZE / 1024 / 1024))
 
