@@ -38,6 +38,7 @@ func main() {
 	log.Println("✅ Chat-Go 已启动")
 	log.Printf("   监听: %s:%d", cfg.Server.Host, cfg.Server.Port)
 	log.Printf("   模型: %s", cfg.GetLLM().Model)
+	log.Printf("   关键词: %v", cfg.CallAIKeywords)
 	log.Printf("   打断: keywords=%v match=%s kws=%v", cfg.Interrupt.Keywords, cfg.Interrupt.MatchMode, cfg.Interrupt.KwsInterrupt)
 	if cfg.Music.Enabled {
 		log.Printf("   音乐: 已启用")

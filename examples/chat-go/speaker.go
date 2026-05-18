@@ -13,6 +13,8 @@ type Speaker struct {
 	Status string // "playing", "paused", "idle"
 }
 
+var stopTTSTimeoutMs uint64 = 1500
+
 func NewSpeaker() *Speaker {
 	return &Speaker{Status: "idle"}
 }
@@ -26,19 +28,26 @@ func (s *Speaker) AbortXiaoAI() error {
 // StopTTS 轻打断：终止 client 端当前 tts_play.sh / miplayer 进程
 func (s *Speaker) StopTTS() error {
 	log.Println("⏹️ 轻打断: 终止当前 TTS")
-	_, err := connect.GetRPC().CallRemote("stop_tts", nil, nil)
+	_, err := connect.GetRPC().CallRemote("stop_tts", nil, &stopTTSTimeoutMs)
 	return err
 }
 
+func shellEscapeSingle(s string) string {
+	return strings.ReplaceAll(s, "'", `'\''`)
+}
+
 func (s *Speaker) PlayTTS(text string, blocking bool) error {
+	script := fmt.Sprintf("/usr/sbin/tts_play.sh '%s'", shellEscapeSingle(text))
 	if blocking {
-		script := fmt.Sprintf("/usr/sbin/tts_play.sh '%s'", text)
 		_, err := s.runShell(script, 10*60*1000)
 		return err
 	}
-	script := fmt.Sprintf(`ubus call mibrain text_to_speech '{"text":"%s","save":0}'`, text)
-	_, err := s.runShell(script, 10000)
-	return err
+	go func() {
+		if _, err := s.runShell(script, 15000); err != nil {
+			log.Printf("⚠️ TTS 播放失败: %v", err)
+		}
+	}()
+	return nil
 }
 
 func (s *Speaker) PlayURL(url string, blocking bool) error {
@@ -47,7 +56,7 @@ func (s *Speaker) PlayURL(url string, blocking bool) error {
 		_, err := s.runShell(script, 10*60*1000)
 		return err
 	}
-	script := fmt.Sprintf(`ubus call mediaplayer player_play_url '{"url":"%s","type":1}'`, url)
+	script := fmt.Sprintf(`ubus -t 5 call mediaplayer player_play_url '{"url":"%s","type":1}'`, url)
 	_, err := s.runShell(script, 10000)
 	return err
 }

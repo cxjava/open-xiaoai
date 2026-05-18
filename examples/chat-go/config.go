@@ -54,32 +54,43 @@ type CustomReply struct {
 }
 
 type AppConfig struct {
-	Server         ServerConfig      `yaml:"server"`
-	Auth           AuthConfig        `yaml:"auth"`
-	Proxy          string            `yaml:"proxy"` // HTTP/SOCKS5 代理，如 http://127.0.0.1:7890
-	LLM            LLMConfig         `yaml:"llm"`
-	Prompt         PromptConfig      `yaml:"prompt"`
-	Context        ContextConfig     `yaml:"context"`
-	Interrupt      InterruptConfig   `yaml:"interrupt"`
-	CallAIKeywords []string          `yaml:"call_ai_keywords"`
-	CustomReplies  []CustomReply     `yaml:"custom_replies"`
-	Greeting       string            `yaml:"greeting"`
-	ErrorMessage   string            `yaml:"error_message"`
-	Music          music.MusicConfig `yaml:"music"`
+	Server         ServerConfig    `yaml:"server"`
+	Auth           AuthConfig      `yaml:"auth"`
+	Proxy          string          `yaml:"proxy"` // HTTP/SOCKS5 代理，如 http://127.0.0.1:7890
+	LLM            LLMConfig       `yaml:"llm"`
+	Prompt         PromptConfig    `yaml:"prompt"`
+	Context        ContextConfig   `yaml:"context"`
+	Interrupt      InterruptConfig `yaml:"interrupt"`
+	CallAIKeywords []string        `yaml:"call_ai_keywords"`
+	CustomReplies  []CustomReply   `yaml:"custom_replies"`
+	Greeting       string          `yaml:"greeting"`
+	ErrorMessage   string          `yaml:"error_message"`
+	// ReplyPrefix 在 AI 第一句 TTS 之前播一段固定前缀，用于让用户区分
+	// "这是 AI 在说" vs "这是小爱原生回复 / 音乐 / 系统提示音"。
+	// 空字符串 = 关闭该前缀。配置文件未设置时使用默认值（见 defaultConfig）。
+	// 注意：只在通过 LLM 走完整流程的 AI 回复前插入；自定义回复(custom_replies)、
+	// 错误回退提示(error_message) 都不挂前缀——那些不是 AI 真正生成的内容。
+	ReplyPrefix string            `yaml:"reply_prefix"`
+	Music       music.MusicConfig `yaml:"music"`
 }
+
+var defaultInterruptKeywords = []string{"闭嘴", "停止", "暂停", "停一下", "不要说了", "别说了"}
+
+type instructionDecision int
+
+const (
+	instructionDecisionIgnore instructionDecision = iota
+	instructionDecisionInterruptOnly
+	instructionDecisionCallAI
+)
 
 // GetLLM 返回 LLM 配置
 func (c *AppConfig) GetLLM() LLMConfig {
 	return c.LLM
 }
 
-func loadConfig(path string) (*AppConfig, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read config: %w", err)
-	}
-
-	cfg := &AppConfig{
+func defaultConfig() *AppConfig {
+	return &AppConfig{
 		Server: ServerConfig{
 			Host: "0.0.0.0",
 			Port: 4399,
@@ -90,14 +101,24 @@ func loadConfig(path string) (*AppConfig, error) {
 		},
 		Context: ContextConfig{HistoryMaxLength: 10},
 		Interrupt: InterruptConfig{
-			Keywords:     []string{"请", "你"},
+			Keywords:     append([]string(nil), defaultInterruptKeywords...),
 			MatchMode:    "prefix",
 			KwsInterrupt: true,
 		},
 		CallAIKeywords: []string{"请", "你"},
 		Greeting:       "已连接",
 		ErrorMessage:   "出错了，请稍后再试吧！",
+		ReplyPrefix:    "AI回复",
 	}
+}
+
+func loadConfig(path string) (*AppConfig, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read config: %w", err)
+	}
+
+	cfg := defaultConfig()
 
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
@@ -120,18 +141,62 @@ func (c *AuthConfig) ValidateAuth(username, password string) bool {
 	return false
 }
 
+func (c *AppConfig) shouldCallAI(text string) bool {
+	return c.callAIKeyword(text) != ""
+}
+
+func (c *AppConfig) callAIKeyword(text string) string {
+	if len(c.CallAIKeywords) == 0 {
+		return "*"
+	}
+	for _, kw := range c.CallAIKeywords {
+		if strings.HasPrefix(text, kw) {
+			return kw
+		}
+	}
+	return ""
+}
+
+func (c *AppConfig) instructionDecision(text string) (instructionDecision, string) {
+	if c.hasCustomReply(text) {
+		return instructionDecisionCallAI, "custom_reply"
+	}
+	if kw := c.callAIKeyword(text); kw != "" {
+		return instructionDecisionCallAI, kw
+	}
+	if kw := c.interruptKeyword(text); kw != "" {
+		return instructionDecisionInterruptOnly, kw
+	}
+	return instructionDecisionIgnore, ""
+}
+
+func (c *AppConfig) hasCustomReply(text string) bool {
+	for _, r := range c.CustomReplies {
+		if r.Match == text {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *AppConfig) shouldStopTTSBeforeHandling(text string) bool {
+	return c.hasCustomReply(text)
+}
+
 // ShouldInterrupt 是否应打断：instruction 文本匹配关键词时返回 true
 func (c *AppConfig) ShouldInterrupt(userText string) bool {
-	keywords := c.Interrupt.Keywords
+	return c.interruptKeyword(userText) != ""
+}
+
+func (c *AppConfig) interruptKeyword(userText string) string {
+	keywords := append([]string(nil), c.Interrupt.Keywords...)
+	keywords = append(keywords, c.CallAIKeywords...)
 	if len(keywords) == 0 {
-		keywords = c.CallAIKeywords
-	}
-	if len(keywords) == 0 {
-		return false
+		return ""
 	}
 	text := strings.TrimSpace(userText)
 	if text == "" {
-		return false
+		return ""
 	}
 	mode := strings.ToLower(c.Interrupt.MatchMode)
 	if mode == "" {
@@ -145,21 +210,21 @@ func (c *AppConfig) ShouldInterrupt(userText string) bool {
 		switch mode {
 		case "exact":
 			if text == kw {
-				return true
+				return kw
 			}
 		case "prefix":
 			if strings.HasPrefix(text, kw) {
-				return true
+				return kw
 			}
 		case "contains":
 			if strings.Contains(text, kw) {
-				return true
+				return kw
 			}
 		default:
 			if strings.HasPrefix(text, kw) {
-				return true
+				return kw
 			}
 		}
 	}
-	return false
+	return ""
 }

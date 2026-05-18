@@ -36,27 +36,35 @@ prompt:
 # 上下文配置
 context:
   # 每次对话携带的最大历史消息数（0 = 关闭）
-  history_max_length: 10
+  history_max_length: 1
 
-# 打断配置：仅当关键词或唤醒词匹配时才打断（与 gemini-go 统一）
+# 打断配置：仅当关键词或唤醒词匹配时才打断
 interrupt:
   keywords:
-    - "请"
-    - "你"
-    - "小爱同学"
+    - "闭嘴"
+    - "停止"
+    - "暂停"
+    - "停一下"
+    - "不要说了"
+    - "别说了"
   match_mode: "prefix"   # exact, prefix, contains
   kws_interrupt: true   # 唤醒词也触发打断
 
 # 只回答以下关键词开头的消息（用于 AI 回复判断）
 call_ai_keywords:
-  - "请"
-  - "你"
+  - "豆包"
+  - "小度"
 
 # 连接成功后播放的提示语
 greeting: "已连接"
 
 # 出错时的提示语
 error_message: "出错了，请稍后再试吧！"
+
+# AI 回复前缀：在 AI 第一句话之前播一段固定提示，便于与小爱原生回复 / 音乐 / 系统音区分。
+# 仅作用于通过 LLM 走完整流程的 AI 回复；自定义回复(custom_replies)、错误提示(error_message)
+# 不会被加前缀。留空 "" 关闭该功能。
+reply_prefix: "AI回复"
 
 # 自定义固定回复（精确匹配用户消息）
 custom_replies:
@@ -70,3 +78,6 @@ custom_replies:
 #   enabled: true
 #   dirs:
 #     - /path/to/music
+#   commands:
+#     # 默认 true：播放本地歌曲前打断小爱云端 NLP，避免云端试听版 URL 覆盖本地播放
+#     abort_xiaoai_on_play: true

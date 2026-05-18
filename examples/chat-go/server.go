@@ -107,9 +107,22 @@ func initConnection(conn *websocket.Conn, r *http.Request, engine *Engine, onCon
 	}
 
 	connect.GetHandlers().SetEventHandler(func(event connect.Event) error {
-		// 音乐模块优先：播放/停止/刷新等指令由音乐处理，不交给 AI
-		if musicModule != nil && musicModule.OnEvent(event) {
-			return nil
+		// 事件分发：music 模块和 chat engine 都要看到事件，原因：
+		//
+		// 1) 即使 music 处理了某条 instruction（如 "闭嘴" 命中 stop_keywords 停了音乐），
+		//    chat engine 仍然必须收到这条 instruction，否则正在进行的 AI 流回复（LLM 流式输出 + TTS 队列）
+		//    不会被取消。用户说"闭嘴"的真实意图是**停掉所有声音**，不只是音乐。
+		//
+		// 2) 同样地，"播放周杰伦"这类 music 命令进入 engine 后，因为不含 call_ai/interrupt 关键词，
+		//    会走 instructionDecisionIgnore 分支安全跳过，不会重复触发 AI。
+		//
+		// 3) playing / kws 等非 instruction 事件，两者也都需要：music 用 playing 同步播放状态，
+		//    engine 用 playing 更新 speaker.UpdateStatus，kws 用于打断 AI 流。
+		//
+		// 历史 bug：之前这里有 `if musicModule.OnEvent(event) { return }` 截胡，导致 "闭嘴" 停了音乐但
+		// AI 还在源源不断输出。现已改为两者都分发。
+		if musicModule != nil {
+			musicModule.OnEvent(event)
 		}
 		engine.OnEvent(event)
 		return nil
@@ -127,15 +140,19 @@ func initConnection(conn *websocket.Conn, r *http.Request, engine *Engine, onCon
 		return connect.Response{ID: "0", Data: &raw}, nil
 	})
 
-	// After connection, announce and optionally start recording/playback.
+	// 连接后播放欢迎语。底层 TTS 已通过 client-go 的 ducking 事件避免打断背景音乐；
+	// 配置 greeting: "" 可以彻底关掉欢迎语（不再回退到 "已连接"）。
 	go func() {
-		time.Sleep(1 * time.Second)
-		rpc := connect.GetRPC()
+		time.Sleep(2 * time.Second)
 		greeting := engine.config.Greeting
 		if greeting == "" {
-			greeting = "已连接"
+			log.Printf("🔕 跳过欢迎语：greeting 为空")
+			return
 		}
-		rpc.CallRemote("run_shell", "/usr/sbin/tts_play.sh '"+greeting+"'", nil)
+		log.Printf("👋 播放欢迎语: %q", greeting)
+		if err := engine.speaker.PlayTTS(greeting, false); err != nil {
+			log.Printf("⚠️ 欢迎语播放失败: %v", err)
+		}
 	}()
 }
 

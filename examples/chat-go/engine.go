@@ -123,11 +123,18 @@ func (e *Engine) handleInstruction(data []byte) {
 
 	text := msg.Payload.Results[0].Text
 	log.Printf("🗣️ 用户: %s", text)
-	// 仅当关键词匹配时才打断并处理
-	if !e.config.ShouldInterrupt(text) {
+	decision, keyword := e.config.instructionDecision(text)
+	switch decision {
+	case instructionDecisionCallAI:
+		log.Printf("✅ 语音进入 AI: call_ai keyword=%q", keyword)
+		e.OnMessage(text)
+	case instructionDecisionInterruptOnly:
+		log.Printf("⏹️ 只打断不调用 AI: interrupt keyword=%q", keyword)
+		e.InterruptOnly()
+	default:
+		log.Printf("⏭️ 不处理语音: 未匹配 call_ai_keywords=%v 或 interrupt.keywords=%v match=%s text=%q", e.config.CallAIKeywords, e.config.Interrupt.Keywords, e.config.Interrupt.MatchMode, text)
 		return
 	}
-	e.OnMessage(text)
 }
 
 func instructionLineFromEventData(data []byte) string {
@@ -163,7 +170,16 @@ func (e *Engine) OnMessage(text string) {
 	e.lastMsgTS = time.Now().UnixMilli()
 	e.mu.Unlock()
 
-	e.speaker.StopTTS() // 轻打断：终止 client 端当前 TTS
+	stopTTS := func() {
+		if err := e.speaker.StopTTS(); err != nil {
+			log.Printf("⚠️ stop_tts timeout/failed: %v", err)
+		}
+	}
+	if e.config.shouldStopTTSBeforeHandling(text) {
+		stopTTS()
+	} else {
+		go stopTTS() // 轻打断：终止 client 端当前 TTS，不阻塞 AI 请求准备
+	}
 	go e.handleMessage(ctx, text)
 }
 
@@ -183,16 +199,14 @@ func (e *Engine) handleMessage(ctx context.Context, text string) {
 	}
 
 	// 2. Check keyword match
-	if !e.matchesKeyword(text) {
+	callAIKeyword := e.config.callAIKeyword(text)
+	if callAIKeyword == "" {
+		log.Printf("⏹️ 只打断不调用 AI: 未匹配 call_ai_keywords=%v text=%q", e.config.CallAIKeywords, text)
 		return
 	}
+	log.Printf("🤖 准备调用 AI: call_ai keyword=%q model=%s text=%q", callAIKeyword, e.config.GetLLM().Model, text)
 
-	// 3. 轻打断：终止 client 端当前 TTS（替代 AbortXiaoAI 重启服务）
-	if err := e.speaker.StopTTS(); err != nil {
-		log.Printf("❌ stop_tts error: %v", err)
-	}
-
-	// 4. Stream from OpenAI → sentence-by-sentence TTS
+	// 3. Stream from OpenAI → sentence-by-sentence TTS
 	e.addHistory("user", text)
 
 	reply, err := e.streamAndPlay(ctx, text)
@@ -216,21 +230,14 @@ func (e *Engine) handleMessage(ctx context.Context, text string) {
 }
 
 func (e *Engine) matchesKeyword(text string) bool {
-	if len(e.config.CallAIKeywords) == 0 {
-		return true
-	}
-	for _, kw := range e.config.CallAIKeywords {
-		if strings.HasPrefix(text, kw) {
-			return true
-		}
-	}
-	return false
+	return e.config.shouldCallAI(text)
 }
 
 // --- OpenAI streaming + sentence-by-sentence TTS ---
 
 func (e *Engine) streamAndPlay(ctx context.Context, userText string) (string, error) {
 	messages := e.buildMessages(userText)
+	log.Printf("🤖 调用 AI 中: messages=%d", len(messages))
 
 	stream, err := e.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
 		Model:    e.config.GetLLM().Model,
@@ -244,14 +251,29 @@ func (e *Engine) streamAndPlay(ctx context.Context, userText string) (string, er
 
 	var fullReply strings.Builder
 	var sentenceBuf strings.Builder
+	// prefixPlayed 确保 ReplyPrefix 在整段 AI 回复里只播一次。
+	// 必须在 LLM 第一个 token 到达后才播——否则等不到 token 就报 prefix 会让用户听到"AI回复...
+	// 然后才是真正的错误提示"，更怪。
+	prefixPlayed := false
 
 	for {
+		// 主动检查 ctx 取消：用户说"闭嘴"等打断词时，InterruptOnly 会 cancelFunc()，
+		// 这里在每次 stream.Recv 前先看一眼，能尽快退出循环，不再消费已 buffer 的 token、
+		// 也不再合成新句子。如果只依赖 stream.Recv 自己感知 ctx 取消，buffered token 会被处理完,
+		// 表现为"我说了闭嘴，AI 还又输出了 1-2 句话"。
+		if ctx.Err() != nil {
+			return fullReply.String(), ctx.Err()
+		}
+
 		resp, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
 			// Flush remaining text
 			if sentenceBuf.Len() > 0 {
 				sentence := sentenceBuf.String()
-				log.Printf("🔊 %s", sentence)
+				log.Printf("AI: %s", sentence)
+				if playErr := e.playReplyPrefixOnce(ctx, &prefixPlayed); playErr != nil {
+					return fullReply.String(), playErr
+				}
 				if playErr := e.playTTS(ctx, sentence); playErr != nil {
 					return fullReply.String(), playErr
 				}
@@ -259,6 +281,10 @@ func (e *Engine) streamAndPlay(ctx context.Context, userText string) (string, er
 			break
 		}
 		if err != nil {
+			// ctx 取消导致的 stream 错误：当成正常打断退出，不再补一句 errMsg TTS
+			if ctx.Err() != nil {
+				return fullReply.String(), ctx.Err()
+			}
 			return fullReply.String(), fmt.Errorf("stream recv: %w", err)
 		}
 
@@ -274,9 +300,17 @@ func (e *Engine) streamAndPlay(ctx context.Context, userText string) (string, er
 		sentenceBuf.WriteString(token)
 
 		if hasSentenceEnd(sentenceBuf.String()) {
+			// 再次检查：可能 token 流式累积了几秒，期间用户说了"闭嘴"，
+			// 此刻句号到了准备 TTS 前再 bail 一次，避免合成一句已经被打断的内容。
+			if ctx.Err() != nil {
+				return fullReply.String(), ctx.Err()
+			}
 			sentence := sentenceBuf.String()
 			sentenceBuf.Reset()
-			log.Printf("🔊 %s", sentence)
+			log.Printf("AI: %s", sentence)
+			if playErr := e.playReplyPrefixOnce(ctx, &prefixPlayed); playErr != nil {
+				return fullReply.String(), playErr
+			}
 			if playErr := e.playTTS(ctx, sentence); playErr != nil {
 				return fullReply.String(), playErr
 			}
@@ -284,6 +318,31 @@ func (e *Engine) streamAndPlay(ctx context.Context, userText string) (string, er
 	}
 
 	return fullReply.String(), nil
+}
+
+// playReplyPrefixOnce 在整段 AI 回复的第一次 TTS 出口前，播一次 ReplyPrefix。
+// 用 *bool 让调用方做"是否第一次"判断，避免每个句子前都重复播。
+//
+// 复用 e.playTTS：它阻塞直到 tts_play.sh 播完，自然保证前缀先于正文播，且响应 ctx 取消
+// （用户在 LLM 思考阶段说"闭嘴"时不再播）。
+func (e *Engine) playReplyPrefixOnce(ctx context.Context, played *bool) error {
+	if *played {
+		return nil
+	}
+	*played = true
+	prefix := strings.TrimSpace(e.config.ReplyPrefix)
+	if prefix == "" {
+		return nil
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	log.Printf("🤖 AI 回复前缀: %s", prefix)
+	if err := e.playTTS(ctx, prefix); err != nil {
+		log.Printf("⚠️ AI 回复前缀 TTS 失败: %v", err)
+		return err
+	}
+	return nil
 }
 
 func (e *Engine) playTTS(ctx context.Context, text string) error {
