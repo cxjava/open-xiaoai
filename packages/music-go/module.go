@@ -42,45 +42,50 @@ func New(cfg *MusicConfig) *Module {
 // Start 启动：加载索引、启动 HTTP 服务、定时刷新
 func (m *Module) Start(ctx context.Context) error {
 	if !m.config.Enabled {
+		log.Printf("🎵 [music] 模块未启用 (enabled=false)，跳过启动")
 		return nil
 	}
 	if len(m.config.Dirs) == 0 {
-		log.Printf("⚠️ 音乐模块已启用但 dirs 未配置")
+		log.Printf("⚠️ [music] 已启用但 dirs 未配置")
 		return nil
 	}
+	log.Printf("🎵 [music] 启动中: dirs=%v exts=%v max_results=%d refresh=%.1fs",
+		m.config.Dirs, m.config.Extensions, m.config.Search.MaxResults, m.config.Search.RefreshIntervalSec)
 
 	// base_url：配置覆盖或自动检测
 	if m.config.HTTP.BaseURL != "" {
+		log.Printf("📡 [music] 使用配置 base_url: %s", m.config.HTTP.BaseURL)
 		m.fileSrv.SetBaseURL(strings.TrimSuffix(m.config.HTTP.BaseURL, "/"))
 	}
 
 	m.player = NewPlayer(m.fileSrv, m.indexer)
 
 	if err := m.indexer.Load(); err != nil {
-		log.Printf("⚠️ 加载曲库索引失败: %v", err)
+		log.Printf("⚠️ [music] 加载曲库索引失败: %v", err)
 	}
 	if err := m.indexer.Refresh(); err != nil {
-		log.Printf("⚠️ 刷新曲库失败: %v", err)
+		log.Printf("⚠️ [music] 刷新曲库失败: %v", err)
 	}
 	if err := m.indexer.Save(); err != nil {
-		log.Printf("⚠️ 保存曲库索引失败: %v", err)
+		log.Printf("⚠️ [music] 保存曲库索引失败: %v", err)
 	}
 
 	// 启动 HTTP 文件服务
 	m.ctx, m.cancel = context.WithCancel(ctx)
 	go func() {
 		if err := m.fileSrv.Start(); err != nil && m.ctx.Err() == nil {
-			log.Printf("❌ 音乐 HTTP 服务异常: %v", err)
+			log.Printf("❌ [music] HTTP 服务异常: %v", err)
 		}
 	}()
 
 	// 定时刷新
 	if m.config.Search.RefreshIntervalSec > 0 {
 		m.refreshWg.Add(1)
+		log.Printf("🔧 [music] 定时刷新已启用: 间隔 %.1fs", m.config.Search.RefreshIntervalSec)
 		go m.refreshLoop()
 	}
 
-	log.Printf("✅ 音乐模块已启动: HTTP %s, 曲库 %d 首", m.fileSrv.BaseURL(), len(m.indexer.Songs()))
+	log.Printf("✅ [music] 模块已启动: HTTP %s, 曲库 %d 首", m.fileSrv.BaseURL(), len(m.indexer.Songs()))
 	return nil
 }
 
@@ -96,7 +101,11 @@ func (m *Module) SetBaseURLForConnection(host string) {
 		port = 18080
 	}
 	baseURL := fmt.Sprintf("http://%s:%d", host, port)
+	old := m.fileSrv.BaseURL()
 	m.fileSrv.SetBaseURL(baseURL)
+	if old != baseURL {
+		log.Printf("📡 [music] 连接感知 base_url 更新: %s → %s (client host=%s)", old, baseURL, host)
+	}
 }
 
 // Stop 停止服务
@@ -104,13 +113,14 @@ func (m *Module) Stop() error {
 	if !m.config.Enabled {
 		return nil
 	}
+	log.Printf("🎵 [music] 停止中...")
 	if m.cancel != nil {
 		m.cancel()
 		m.cancel = nil
 	}
 	m.refreshWg.Wait()
-	m.player.CancelResume()
 	m.player.ClearQueue()
+	log.Printf("🎵 [music] 已停止")
 	return nil
 }
 
@@ -130,6 +140,17 @@ func (m *Module) OnEvent(event connect.Event) bool {
 	}
 }
 
+// IsPlaying 当前是否处于播放中状态。
+// 用于上层（如 chat-go server）决定要不要播放欢迎语 / 提示语，避免打断正在播放的歌曲。
+// 注意：此值依赖最近一次 "playing" 事件，server 刚启动还没收到 playing 事件时会返回 false，
+// 调用方建议先 Sleep 一小段时间给 device 发 state，再检查。
+func (m *Module) IsPlaying() bool {
+	if !m.config.Enabled || m.player == nil {
+		return false
+	}
+	return m.player.CurrentState() == StatePlaying
+}
+
 // handleInstruction 处理语音指令
 func (m *Module) handleInstruction(event connect.Event) bool {
 	text := ParseInstructionUserText(event.Data)
@@ -137,56 +158,53 @@ func (m *Module) handleInstruction(event connect.Event) bool {
 		return false
 	}
 	normalized := NormalizedForMatch(text)
+	log.Printf("🎤 [music] instruction: raw=%q normalized=%q", text, normalized)
 
 	// 按优先级：stop > next/previous > modes > refresh > random > play
 	if m.matchExact(normalized, m.config.Commands.StopKeywords) {
+		log.Printf("🎯 [music] 命中 stop_keywords")
 		m.player.ClearQueue()
 		_ = m.player.Stop()
 		m.player.Speak("好的，已停止")
 		return true
 	}
 	if m.matchExact(normalized, m.config.Commands.NextKeywords) {
+		log.Printf("🎯 [music] 命中 next_keywords")
 		return m.handleNext()
 	}
 	if m.matchExact(normalized, m.config.Commands.PreviousKeywords) {
+		log.Printf("🎯 [music] 命中 previous_keywords")
 		return m.handlePrevious()
 	}
 	if m.matchExact(normalized, m.config.Commands.RepeatOneKeywords) {
+		log.Printf("🎯 [music] 命中 repeat_one_keywords")
 		return m.handlePlaybackMode(PlaybackModeRepeatOne, "已切换到单曲循环")
 	}
 	if m.matchExact(normalized, m.config.Commands.RepeatAllKeywords) {
+		log.Printf("🎯 [music] 命中 repeat_all_keywords")
 		return m.handlePlaybackMode(PlaybackModeRepeatAll, "已切换到全部循环")
 	}
 	if m.matchExact(normalized, m.config.Commands.ShuffleModeKeywords) {
+		log.Printf("🎯 [music] 命中 shuffle_mode_keywords")
 		return m.handlePlaybackMode(PlaybackModeShuffle, "已切换到随机播放")
 	}
 	if m.matchExact(normalized, m.config.Commands.RefreshKeywords) {
+		log.Printf("🎯 [music] 命中 refresh_keywords")
 		return m.handleRefresh(text)
 	}
 	if m.matchExact(normalized, m.config.Commands.RandomPlayKeywords) {
+		log.Printf("🎯 [music] 命中 random_play_keywords")
 		return m.handleRandomPlay(text)
 	}
 	keyword := m.extractPlayKeyword(text)
 	if keyword != "" {
+		log.Printf("🎯 [music] 命中 play_keywords: 提取关键词=%q", keyword)
 		return m.handlePlay(keyword)
 	}
-	m.handleUserSpeechInterrupt(normalized)
+	// 非音乐指令保持当前播放，不主动 Stop / ClearQueue。
+	// 让 chat-go 的 AI engine 自己决定是否打断当前播放，music-go 不越权。
+	log.Printf("⏭️ [music] 非音乐指令，保持当前播放: %q", normalized)
 	return false
-}
-
-// handleUserSpeechInterrupt 用户说话时的打断处理
-func (m *Module) handleUserSpeechInterrupt(normalized string) {
-	// 白名单：不清空队列，延迟恢复
-	for _, kw := range m.config.Commands.InterruptWhitelist {
-		if strings.Contains(normalized, NormalizedForMatch(kw)) {
-			m.player.ScheduleResume(m.config.Commands.AutoResumeDelaySec)
-			return
-		}
-	}
-	// 非白名单：清空队列并停止
-	m.player.CancelResume()
-	m.player.ClearQueue()
-	_ = m.player.Stop()
 }
 
 func (m *Module) matchExact(normalized string, keywords []string) bool {
@@ -215,31 +233,53 @@ func (m *Module) extractPlayKeyword(text string) string {
 
 func (m *Module) handlePlay(keyword string) bool {
 	if len(m.config.Dirs) == 0 {
+		log.Printf("⚠️ [music] handlePlay 中止: dirs 未配置")
 		m.player.Speak("本地音乐目录还没有配置")
 		return true
 	}
 	intent := ParsePlayIntent(keyword)
-	var songs []IndexedSong
-	// 有集数或匹配故事配置时，使用 SearchEpisode（按集数排序）
 	useEpisode := intent.Episode > 0 || m.matchStory(intent.SeriesName)
+	log.Printf("🎵 [music] handlePlay: keyword=%q intent={series=%q episode=%d} useEpisode=%v",
+		keyword, intent.SeriesName, intent.Episode, useEpisode)
+
+	var songs []IndexedSong
 	if useEpisode {
 		songs = m.indexer.SearchEpisode(intent.SeriesName, intent.Episode, m.config.Search.MaxResults)
 	} else {
 		songs = m.indexer.Search(intent.SeriesName, m.config.Search.MaxResults)
 	}
 	if len(songs) == 0 {
+		log.Printf("🔍 [music] 搜索无结果: series=%q episode=%d", intent.SeriesName, intent.Episode)
 		m.player.Speak(fmt.Sprintf("没有找到包含%s的歌曲", intent.SeriesName))
 		return true
 	}
+	log.Printf("🔍 [music] 搜索命中 %d 首, 首条=%s", len(songs), songs[0].Path)
 	items := m.player.BuildQueueFromSongs(songs)
-	m.player.StopTTS()
-	if intent.Episode > 0 {
-		m.player.Speak(fmt.Sprintf("好的，找到%d集，从第%d集开始播放", len(items), intent.Episode))
-	} else if useEpisode {
-		m.player.Speak(fmt.Sprintf("好的，找到%d集", len(items)))
-	} else {
-		m.player.Speak(fmt.Sprintf("好的，找到%d首歌曲", len(items)))
+	log.Printf("🎵 [music] 构建队列: %d 首 (过滤后)", len(items))
+
+	// 时序：AbortXiaoAI → Speak → SetQueue
+	//
+	// 1) AbortXiaoAI（同步）：/etc/init.d/mico_aivs_lab restart
+	//    - 把小爱云端 NLP/TTS 流水线整个杀掉，云端就不会再返回试听版抢占 mediaplayer
+	//    - restart 命令本身很快（几十 ms），不显式 sleep
+	//
+	// 2) Speak（同步阻塞 3-5s）：tts_play.sh 反馈语
+	//
+	// 3) SetQueue → PlayURL：切到本地 URL
+
+	if m.config.Commands.AbortXiaoAIOnPlay != nil && *m.config.Commands.AbortXiaoAIOnPlay {
+		_ = m.player.AbortXiaoAI()
 	}
+
+	feedback := fmt.Sprintf("好的，找到%d首歌曲", len(items))
+	if intent.Episode > 0 {
+		feedback = fmt.Sprintf("好的，找到%d集，从第%d集开始播放", len(items), intent.Episode)
+	} else if useEpisode {
+		feedback = fmt.Sprintf("好的，找到%d集", len(items))
+	}
+
+	_ = m.player.Speak(feedback)
+
 	m.player.SetQueue(items)
 	return true
 }
@@ -248,6 +288,7 @@ func (m *Module) handleNext() bool {
 	if m.player.Next() {
 		return true
 	}
+	log.Printf("➡️ [music] 没有下一首可播")
 	m.player.Speak("没有下一首")
 	return true
 }
@@ -256,11 +297,13 @@ func (m *Module) handlePrevious() bool {
 	if m.player.Previous() {
 		return true
 	}
+	log.Printf("⬅️ [music] 已经是第一首")
 	m.player.Speak("已经是第一首")
 	return true
 }
 
 func (m *Module) handlePlaybackMode(mode PlaybackMode, message string) bool {
+	log.Printf("🎚️ [music] 切换播放模式: %d (%s)", mode, message)
 	m.player.SetMode(mode)
 	m.player.Speak(message)
 	return true
@@ -284,15 +327,18 @@ func (m *Module) matchStory(seriesName string) bool {
 
 func (m *Module) handleRandomPlay(text string) bool {
 	if len(m.config.Dirs) == 0 {
+		log.Printf("⚠️ [music] handleRandomPlay 中止: dirs 未配置")
 		m.player.Speak("本地音乐目录还没有配置")
 		return true
 	}
 	songs := m.indexer.Random(m.config.Search.MaxResults)
 	if len(songs) == 0 {
+		log.Printf("⚠️ [music] 曲库为空，无法随机播放")
 		m.player.Speak("曲库为空，无法随机播放")
 		return true
 	}
 	items := m.player.BuildQueueFromSongs(songs)
+	log.Printf("🎵 [music] 随机播放: %d 首", len(items))
 	m.player.StopTTS()
 	m.player.Speak(fmt.Sprintf("好的，随机播放%d首歌曲", len(items)))
 	m.player.SetQueue(items)
@@ -303,12 +349,14 @@ func (m *Module) handleRefresh(text string) bool {
 	m.refreshingMu.Lock()
 	if m.refreshing {
 		m.refreshingMu.Unlock()
+		log.Printf("🔧 [music] 刷新请求被丢弃: 已有刷新任务进行中")
 		m.player.Speak("曲库正在刷新，请稍候")
 		return true
 	}
 	m.refreshing = true
 	m.refreshingMu.Unlock()
 
+	log.Printf("🔧 [music] 开始刷新曲库 (用户触发)")
 	m.player.Speak("正在刷新曲库，请稍候")
 	go func() {
 		defer func() {
@@ -318,11 +366,13 @@ func (m *Module) handleRefresh(text string) bool {
 		}()
 		start := time.Now()
 		if err := m.indexer.Refresh(); err != nil {
+			log.Printf("❌ [music] 曲库刷新失败: %v", err)
 			m.player.Speak("曲库刷新失败，请稍后重试")
 			return
 		}
 		_ = m.indexer.Save()
 		elapsed := int(time.Since(start).Seconds())
+		log.Printf("✅ [music] 曲库刷新完成: %d 首, 耗时 %ds", len(m.indexer.Songs()), elapsed)
 		m.player.Speak(fmt.Sprintf("曲库刷新完成，共%d首，耗时%d秒", len(m.indexer.Songs()), elapsed))
 	}()
 	return true
@@ -349,12 +399,18 @@ func (m *Module) refreshLoop() {
 	for {
 		select {
 		case <-m.ctx.Done():
+			log.Printf("🔧 [music] refreshLoop 退出")
 			return
 		case <-ticker.C:
+			log.Printf("🔧 [music] 定时刷新曲库...")
+			start := time.Now()
 			if err := m.indexer.Refresh(); err != nil {
-				log.Printf("⚠️ 定时刷新曲库失败: %v", err)
-			} else if err := m.indexer.Save(); err != nil {
-				log.Printf("⚠️ 保存曲库索引失败: %v", err)
+				log.Printf("⚠️ [music] 定时刷新失败: %v", err)
+			} else {
+				if err := m.indexer.Save(); err != nil {
+					log.Printf("⚠️ [music] 保存索引失败: %v", err)
+				}
+				log.Printf("✅ [music] 定时刷新完成: %d 首, 耗时 %v", len(m.indexer.Songs()), time.Since(start).Round(time.Millisecond))
 			}
 		}
 	}

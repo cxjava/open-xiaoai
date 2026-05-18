@@ -58,7 +58,8 @@ func (s *FileServer) SetBaseURL(url string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	url = strings.TrimSuffix(url, "/")
-	if url != "" {
+	if url != "" && url != s.baseURL {
+		log.Printf("📡 [music/http] SetBaseURL: %s → %s", s.baseURL, url)
 		s.baseURL = url
 	}
 }
@@ -110,41 +111,76 @@ func (s *FileServer) IsAllowed(absPath string) bool {
 	return ok
 }
 
+// audioContentTypes 显式指定常见音频扩展的 MIME。
+// 不靠系统 mime db：
+//   - 不同 Linux 发行版/Go 版本的 mime db 不一致（FLAC 经常缺）
+//   - 小爱 mediaplayer 收到 application/octet-stream 时倾向于不直接走本地解码，
+//     极端情况会回退到云端"试听"播放，跟用户描述的现象一致
+var audioContentTypes = map[string]string{
+	".mp3":  "audio/mpeg",
+	".flac": "audio/flac",
+	".wav":  "audio/wav",
+	".m4a":  "audio/mp4",
+	".aac":  "audio/aac",
+	".ogg":  "audio/ogg",
+}
+
 // ServeHTTP 实现 http.Handler
 func (s *FileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	if r.Method != http.MethodHead && r.Method != http.MethodGet {
+		log.Printf("🌐 [music/http] 405 Method Not Allowed: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	// /file/{hexPath}/{filename}
 	parts := strings.SplitN(strings.TrimPrefix(r.URL.Path, "/"), "/", 3)
 	if len(parts) < 3 || parts[0] != "file" {
+		log.Printf("🌐 [music/http] 404 bad path: %s from %s", r.URL.Path, r.RemoteAddr)
 		http.NotFound(w, r)
 		return
 	}
 	hexPath := parts[1]
 	decoded, err := hex.DecodeString(hexPath)
 	if err != nil {
+		log.Printf("🌐 [music/http] 404 hex decode err: %v (hex=%s)", err, hexPath)
 		http.NotFound(w, r)
 		return
 	}
 	absPath := string(decoded)
 	if !s.IsAllowed(absPath) {
+		log.Printf("🌐 [music/http] 404 not in allowlist: %s from %s", absPath, r.RemoteAddr)
 		http.NotFound(w, r)
 		return
 	}
 	info, err := os.Stat(absPath)
 	if err != nil || info.IsDir() {
+		log.Printf("🌐 [music/http] 404 stat err/isdir: %s err=%v", absPath, err)
 		http.NotFound(w, r)
 		return
 	}
 	f, err := os.Open(absPath)
 	if err != nil {
+		log.Printf("❌ [music/http] open err: %s err=%v", absPath, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 	defer f.Close()
 
+	rangeHeader := r.Header.Get("Range")
+	userAgent := r.Header.Get("User-Agent")
+	ext := strings.ToLower(filepath.Ext(absPath))
+	if ct, ok := audioContentTypes[ext]; ok {
+		w.Header().Set("Content-Type", ct)
+	}
+	// 显式标 Accept-Ranges，明确告诉 mediaplayer 我们支持断点续传
+	w.Header().Set("Accept-Ranges", "bytes")
+	if rangeHeader != "" {
+		log.Printf("🌐 [music/http] %s %s range=%s size=%dKB ua=%q from %s",
+			r.Method, filepath.Base(absPath), rangeHeader, info.Size()/1024, userAgent, r.RemoteAddr)
+	} else {
+		log.Printf("🌐 [music/http] %s %s size=%dKB ua=%q from %s",
+			r.Method, filepath.Base(absPath), info.Size()/1024, userAgent, r.RemoteAddr)
+	}
 	// 支持 Range
 	http.ServeContent(w, r, filepath.Base(absPath), info.ModTime(), f)
 }
@@ -152,5 +188,6 @@ func (s *FileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Start 启动 HTTP 服务
 func (s *FileServer) Start() error {
 	addr := fmt.Sprintf(":%d", s.port)
+	log.Printf("🌐 [music/http] 监听 %s, base_url=%s", addr, s.baseURL)
 	return http.ListenAndServe(addr, s)
 }

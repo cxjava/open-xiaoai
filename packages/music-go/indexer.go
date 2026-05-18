@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dhowden/tag"
 	"golang.org/x/sync/errgroup"
@@ -62,11 +63,13 @@ func (i *Indexer) Songs() []IndexedSong {
 func (i *Indexer) Load() error {
 	path := i.config.Search.IndexFile
 	if path == "" {
+		log.Printf("📂 [music/idx] index_file 未配置，跳过 Load")
 		return nil
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
+			log.Printf("📂 [music/idx] 索引文件不存在: %s (首次启动)", path)
 			return nil
 		}
 		return fmt.Errorf("read index: %w", err)
@@ -82,7 +85,7 @@ func (i *Indexer) Load() error {
 		i.pathSet[s.Path] = struct{}{}
 	}
 	i.mu.Unlock()
-	log.Printf("📂 已加载曲库索引: %d 首", len(songs))
+	log.Printf("📂 [music/idx] 已加载曲库索引: %d 首 (from %s)", len(songs), path)
 	return nil
 }
 
@@ -94,6 +97,7 @@ func (i *Indexer) Save() error {
 	i.mu.RUnlock()
 
 	if len(songs) == 0 {
+		log.Printf("📂 [music/idx] Save 跳过: 曲库为空")
 		return nil
 	}
 	path := i.config.Search.IndexFile
@@ -111,11 +115,13 @@ func (i *Indexer) Save() error {
 	if err := os.WriteFile(path, data, 0644); err != nil {
 		return fmt.Errorf("write index: %w", err)
 	}
+	log.Printf("💾 [music/idx] 已保存索引: %d 首 → %s (%d KB)", len(songs), path, len(data)/1024)
 	return nil
 }
 
 // Refresh 刷新索引：扫描目录，提取元数据
 func (i *Indexer) Refresh() error {
+	scanStart := time.Now()
 	extSet := make(map[string]struct{})
 	for _, ext := range i.config.Extensions {
 		extSet[strings.ToLower(ext)] = struct{}{}
@@ -123,7 +129,9 @@ func (i *Indexer) Refresh() error {
 
 	files := make([]string, 0, 1024)
 	for _, dir := range i.config.Dirs {
-		_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		dirStart := time.Now()
+		dirCount := 0
+		walkErr := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return nil
 			}
@@ -135,13 +143,19 @@ func (i *Indexer) Refresh() error {
 				abs, err := filepath.Abs(path)
 				if err == nil {
 					files = append(files, abs)
+					dirCount++
 				}
 			}
 			return nil
 		})
+		if walkErr != nil {
+			log.Printf("⚠️ [music/idx] 扫描 %s 出错: %v", dir, walkErr)
+		}
+		log.Printf("📂 [music/idx] 扫描 %s: 找到 %d 个音频文件, 耗时 %v", dir, dirCount, time.Since(dirStart).Round(time.Millisecond))
 	}
 
 	if len(files) == 0 {
+		log.Printf("⚠️ [music/idx] 所有目录扫描后没有发现音频文件 (dirs=%v exts=%v)", i.config.Dirs, i.config.Extensions)
 		i.mu.Lock()
 		i.songs = nil
 		i.pathSet = make(map[string]struct{})
@@ -182,9 +196,13 @@ func (i *Indexer) Refresh() error {
 		newSongs = append(newSongs, IndexedSong{Path: path})
 	}
 
+	log.Printf("📂 [music/idx] 增量刷新: 总文件 %d, 需重读元数据 %d", len(files), len(needRefresh))
+
 	// 并发提取需要刷新的元数据
 	refreshed := make(map[string]IndexedSong)
 	var refreshedMu sync.Mutex
+	var failCount int
+	var failCountMu sync.Mutex
 	g, _ := errgroup.WithContext(context.Background())
 
 	for _, path := range needRefresh {
@@ -192,6 +210,9 @@ func (i *Indexer) Refresh() error {
 		g.Go(func() error {
 			s, err := extractMetadata(path)
 			if err != nil {
+				failCountMu.Lock()
+				failCount++
+				failCountMu.Unlock()
 				return nil
 			}
 			refreshedMu.Lock()
@@ -203,6 +224,9 @@ func (i *Indexer) Refresh() error {
 
 	if err := g.Wait(); err != nil {
 		return err
+	}
+	if failCount > 0 {
+		log.Printf("⚠️ [music/idx] %d 个文件元数据提取失败 (将退化为文件名匹配)", failCount)
 	}
 
 	// 构建最终列表
@@ -244,6 +268,7 @@ func (i *Indexer) Refresh() error {
 	}
 	i.mu.Unlock()
 
+	log.Printf("📂 [music/idx] Refresh 完成: 共 %d 首, 总耗时 %v", len(newSongs), time.Since(scanStart).Round(time.Millisecond))
 	return nil
 }
 

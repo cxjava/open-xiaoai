@@ -37,8 +37,11 @@ type CommandsConfig struct {
 	RepeatOneKeywords   []string `yaml:"repeat_one_keywords"`
 	RepeatAllKeywords   []string `yaml:"repeat_all_keywords"`
 	ShuffleModeKeywords []string `yaml:"shuffle_mode_keywords"`
-	InterruptWhitelist  []string `yaml:"interrupt_whitelist_keywords"` // 打断白名单：匹配时不清空队列
-	AutoResumeDelaySec  float64  `yaml:"auto_resume_delay_sec"`
+
+	// AbortXiaoAIOnPlay：handlePlay 时是否同步重启 mico_aivs_lab，杀掉小爱云端 NLP 流水线。
+	// 解决"我们 player_play_url 本地歌后，小爱云端识别同一句话再返回试听版 URL 覆盖我们"的竞态。
+	// 默认 true，需要时可在 config.yaml 里 commands.abort_xiaoai_on_play: false 关掉。
+	AbortXiaoAIOnPlay *bool `yaml:"abort_xiaoai_on_play,omitempty"`
 }
 
 // HTTPConfig HTTP 文件服务配置
@@ -64,8 +67,6 @@ var DefaultCommands = CommandsConfig{
 	RepeatOneKeywords:   []string{"单曲循环"},
 	RepeatAllKeywords:   []string{"全部循环", "列表循环"},
 	ShuffleModeKeywords: []string{"随机播放"},
-	InterruptWhitelist:  []string{"音量", "声音", "大点声", "小点声", "调大音量", "调小音量", "静音", "取消静音"},
-	AutoResumeDelaySec:  1.8,
 }
 
 // ApplyDefaults 填充默认值
@@ -116,12 +117,10 @@ func (c *MusicConfig) ApplyDefaults() {
 		c.Commands.ShuffleModeKeywords = make([]string, len(DefaultCommands.ShuffleModeKeywords))
 		copy(c.Commands.ShuffleModeKeywords, DefaultCommands.ShuffleModeKeywords)
 	}
-	if len(c.Commands.InterruptWhitelist) == 0 {
-		c.Commands.InterruptWhitelist = make([]string, len(DefaultCommands.InterruptWhitelist))
-		copy(c.Commands.InterruptWhitelist, DefaultCommands.InterruptWhitelist)
-	}
-	if c.Commands.AutoResumeDelaySec <= 0 {
-		c.Commands.AutoResumeDelaySec = DefaultCommands.AutoResumeDelaySec
+	if c.Commands.AbortXiaoAIOnPlay == nil {
+		// 默认开启：解决小爱云端 NLP 抢占本地播放的竞态问题
+		t := true
+		c.Commands.AbortXiaoAIOnPlay = &t
 	}
 	if c.HTTP.Port <= 0 {
 		c.HTTP.Port = 18080

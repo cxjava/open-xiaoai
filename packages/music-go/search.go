@@ -1,6 +1,7 @@
 package music
 
 import (
+	"log"
 	"math/rand/v2"
 	"path/filepath"
 	"sort"
@@ -48,6 +49,12 @@ func (i *Indexer) Search(keyword string, maxResults int) []IndexedSong {
 	for idx, item := range matched {
 		out[idx] = item.song
 	}
+	if len(out) > 0 {
+		log.Printf("🔍 [music/search] keyword=%q 命中 %d/%d (top1 score=%d path=%s)",
+			kw, len(out), len(songs), matched[0].score, matched[0].song.Path)
+	} else {
+		log.Printf("🔍 [music/search] keyword=%q 无命中 (曲库 %d 首)", kw, len(songs))
+	}
 	return out
 }
 
@@ -63,6 +70,7 @@ func (i *Indexer) Random(n int) []IndexedSong {
 	i.mu.RUnlock()
 
 	if len(songs) == 0 {
+		log.Printf("🔍 [music/search] Random: 曲库为空")
 		return nil
 	}
 	if len(songs) <= n {
@@ -71,11 +79,13 @@ func (i *Indexer) Random(n int) []IndexedSong {
 		rand.Shuffle(len(shuffled), func(a, b int) {
 			shuffled[a], shuffled[b] = shuffled[b], shuffled[a]
 		})
+		log.Printf("🔍 [music/search] Random: 返回全量 %d 首 (曲库不足 %d)", len(shuffled), n)
 		return shuffled
 	}
 	rand.Shuffle(len(songs), func(a, b int) {
 		songs[a], songs[b] = songs[b], songs[a]
 	})
+	log.Printf("🔍 [music/search] Random: 从 %d 首中抽取 %d 首", len(songs), n)
 	return songs[:n]
 }
 
@@ -199,6 +209,8 @@ func (i *Indexer) SearchEpisode(seriesName string, episode int, maxResults int) 
 	}
 
 	if len(matched) == 0 {
+		log.Printf("🔍 [music/search] SearchEpisode: series=%q (resolved=%q) episode=%d 无命中",
+			seriesName, resolvedName, episode)
 		return nil
 	}
 
@@ -236,5 +248,7 @@ func (i *Indexer) SearchEpisode(seriesName string, episode int, maxResults int) 
 		}
 	}
 
+	log.Printf("🔍 [music/search] SearchEpisode: series=%q (resolved=%q) episode=%d → %d 项 (首条 ep=%d)",
+		seriesName, resolvedName, episode, len(matched), matched[0].Episode)
 	return matched
 }

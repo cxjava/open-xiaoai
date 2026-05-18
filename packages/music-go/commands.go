@@ -1,7 +1,9 @@
 package music
 
 import (
+	"bytes"
 	"encoding/json"
+	"log"
 	"regexp"
 	"strings"
 )
@@ -60,13 +62,26 @@ type instructionLogLine struct {
 }
 
 // ParseInstructionUserText 从 instruction 事件中提取用户最终语音文本
-// 兼容 Go client {Type:"NewLine", Line:"..."} 与 Rust client {NewLine:"..."}
+// 兼容三种事件载荷：
+//   - Go client 对象： {"Type":"NewLine","Line":"..."} / {"Type":"NewFile"}
+//   - Rust client 对象： {"NewLine":"..."}
+//   - Rust client 字符串字面量： "NewFile"（serde externally-tagged 的 unit 变体）
 func ParseInstructionUserText(data *json.RawMessage) string {
 	if data == nil {
 		return ""
 	}
+	raw := bytes.TrimSpace(*data)
+	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
+		return ""
+	}
+	// Rust client 的 unit 变体（如 "NewFile"）会序列化为 JSON 字符串，
+	// 不是 NewLine，直接跳过，不报警。
+	if raw[0] == '"' {
+		return ""
+	}
 	var ev instructionEventData
-	if err := json.Unmarshal(*data, &ev); err != nil {
+	if err := json.Unmarshal(raw, &ev); err != nil {
+		log.Printf("⚠️ [music/parse] instruction event 外层 JSON 解析失败: %v (data=%s)", err, string(raw))
 		return ""
 	}
 	line := ev.Line
@@ -74,17 +89,21 @@ func ParseInstructionUserText(data *json.RawMessage) string {
 		line = ev.NewLine
 	}
 	if line == "" {
+		// NewFile 事件等非 NewLine 类型，正常跳过，不打 log
 		return ""
 	}
 	var msg instructionLogLine
 	if err := json.NewDecoder(strings.NewReader(line)).Decode(&msg); err != nil {
+		log.Printf("⚠️ [music/parse] instruction line JSON 解析失败: %v (line=%q)", err, line)
 		return ""
 	}
 	if !strings.EqualFold(msg.Header.Namespace, "SpeechRecognizer") ||
 		!strings.EqualFold(msg.Header.Name, "RecognizeResult") {
+		// 非语音识别结果（如 NLP 等），跳过不报警
 		return ""
 	}
 	if !msg.Payload.IsFinal || len(msg.Payload.Results) == 0 {
+		// 中间结果，跳过不报警
 		return ""
 	}
 	return strings.TrimSpace(msg.Payload.Results[0].Text)

@@ -37,7 +37,6 @@
 | HTTP 文件服务 | `/file/{hex(path)}/{filename}`，白名单 + Range 支持 |
 | 播放队列 | 搜索/随机结果入队，顺序播放 |
 | 自动切歌 | 监听 `playing` 事件 Idle 状态，触发下一首 |
-| 打断白名单 | 音量等指令不清空队列，延迟后自动恢复 |
 
 ### 1.3 Phase 1 简化项
 
@@ -98,16 +97,6 @@ music:
       - "关机"
     refresh_keywords: ["刷新曲库"]
     random_play_keywords: ["随便听听"]
-    interrupt_whitelist_keywords:
-      - "音量"
-      - "声音"
-      - "大点声"
-      - "小点声"
-      - "调大音量"
-      - "调小音量"
-      - "静音"
-      - "取消静音"
-    auto_resume_delay_sec: 1.8
   http:
     port: 18080
     base_url: ""                # 空则自动检测 LAN IP，建议显式配置
@@ -138,8 +127,6 @@ type CommandsConfig struct {
     StopKeywords       []string `yaml:"stop_keywords"`
     RefreshKeywords    []string `yaml:"refresh_keywords"`
     RandomPlayKeywords []string `yaml:"random_play_keywords"`
-    InterruptWhitelist []string `yaml:"interrupt_whitelist_keywords"`
-    AutoResumeDelaySec float64  `yaml:"auto_resume_delay_sec"`
 }
 
 type HTTPConfig struct {
@@ -294,12 +281,7 @@ playing 事件 status == "Paused":
 
 **instruction 数据格式**：兼容 Go client `{Type:"NewLine", Line:"..."}` 与 Rust client `{NewLine:"..."}`。内层 JSON 需 `header.namespace=="SpeechRecognizer"`、`name=="RecognizeResult"`、`payload.is_final==true`，取 `results[0].text`。
 
-**处理顺序**：每次 instruction 先执行 `handleUserSpeechInterrupt`，再按优先级判断 stop > refresh > random > play。
-
-**handleUserSpeechInterrupt**：
-
-- 若 normalized 等于或包含任一 `interrupt_whitelist_keywords`：不清空队列，延迟 `auto_resume_delay_sec` 后恢复当前曲
-- 否则：清空队列并停止播放
+**处理顺序**：按优先级判断 stop > refresh > random > play。未命中音乐指令时，music-go 不主动停止或恢复播放，交由上层 AI engine 决定是否打断。
 
 ---
 
@@ -355,11 +337,10 @@ playing 事件 status == "Paused":
 |------|------|
 | 1 | config、默认值、indexer、search、normalize |
 | 2 | HTTP server、player（PlayURL/Stop/Speak） |
-| 3 | commands 解析、instruction 处理、handleUserSpeechInterrupt、队列管理 |
+| 3 | commands 解析、instruction 处理、队列管理 |
 | 4 | playing 事件、Idle 自动切歌 |
-| 5 | 打断白名单、延迟恢复 |
-| 6 | 定时刷新循环 |
-| 7 | chat-go / gemini-go 集成与联调 |
+| 5 | 定时刷新循环 |
+| 6 | chat-go / gemini-go 集成与联调 |
 
 ---
 
