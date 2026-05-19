@@ -6,7 +6,7 @@ Open-XiaoAI 通过运行在音箱上的 client 补丁程序，把小爱音箱的
 
 当前重点维护的 `client-go`、`chat-go`、`gemini-go` 和 `music-go` 都是使用 Golang 重写的新版本，目标是减少运行时依赖，尽量用单二进制完成部署。
 
-![](./docs/images/cover.jpg)
+<img src="./docs/images/cover.jpg" alt="Open-XiaoAI cover" width="400">
 
 ## 你可以用它做什么
 
