@@ -23,11 +23,11 @@ RUN echo '[ -s "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"' >> "$BASH_ENV"
 WORKDIR /app
 
 # 复制项目文件
-COPY examples/xiaozhi .
-COPY packages/client-rust ./client-rust
+COPY legacy/xiaozhi .
+COPY legacy/client-rust ./client-rust
 
 # 构建
-RUN sed -i 's/\.\.\/\.\.\/packages\///g' Cargo.toml \
+RUN sed -i 's/\.\.\///g' Cargo.toml \
     && cargo build --release
 
 # 安装依赖
@@ -50,8 +50,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV CLI=true
 
 COPY --from=builder /app/.venv /app/.venv
-COPY examples/xiaozhi/main.py . 
-COPY examples/xiaozhi/xiaozhi ./xiaozhi
+COPY legacy/xiaozhi/main.py . 
+COPY legacy/xiaozhi/xiaozhi ./xiaozhi
 
 # 先初始化关键词模型，然后启动主程序
 CMD ["/bin/bash", "-c", "source /app/.venv/bin/activate && python xiaozhi/services/audio/kws/keywords.py && python main.py"]

@@ -4,11 +4,11 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'packages/client-rust/**'
+      - 'legacy/client-rust/**'
   pull_request:
     branches: [ main ]
     paths:
-      - 'packages/client-rust/**'
+      - 'legacy/client-rust/**'
 
 jobs:
   compile:
@@ -30,12 +30,12 @@ jobs:
       run: cargo install cross
       
     - name: Compile client-rust
-      working-directory: packages/client-rust
+      working-directory: legacy/client-rust
       run: cross build --release --target armv7-unknown-linux-gnueabihf
     
     - name: Upload compiled binary
       uses: actions/upload-artifact@v4
       with:
         name: client-rust-binary
-        path: packages/client-rust/target/armv7-unknown-linux-gnueabihf/release/client
+        path: legacy/client-rust/target/armv7-unknown-linux-gnueabihf/release/client
         retention-days: 7

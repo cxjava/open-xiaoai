@@ -2,29 +2,29 @@
 **/*
 
 # Rust
-!packages/client-rust/src
-!packages/client-rust/Cargo.toml
-!packages/client-rust/Cargo.lock
+!legacy/client-rust/src
+!legacy/client-rust/Cargo.toml
+!legacy/client-rust/Cargo.lock
 
 # MiGPT
-!examples/migpt/src
-!examples/migpt/migpt
-!examples/migpt/config.ts
-!examples/migpt/package.json
-!examples/migpt/pnpm-lock.yaml
-!examples/migpt/Cargo.toml
-!examples/migpt/Cargo.lock
-!examples/migpt/tsconfig.json
-examples/migpt/migpt/open-xiaoai.node
+!legacy/migpt/src
+!legacy/migpt/migpt
+!legacy/migpt/config.ts
+!legacy/migpt/package.json
+!legacy/migpt/pnpm-lock.yaml
+!legacy/migpt/Cargo.toml
+!legacy/migpt/Cargo.lock
+!legacy/migpt/tsconfig.json
+legacy/migpt/migpt/open-xiaoai.node
 
 # XiaoZhi
-!examples/xiaozhi/src
-!examples/xiaozhi/xiaozhi
-!examples/xiaozhi/Cargo.toml
-!examples/xiaozhi/Cargo.lock
-!examples/xiaozhi/config.py
-!examples/xiaozhi/main.py
-!examples/xiaozhi/uv.lock
-!examples/xiaozhi/.python-version
-!examples/xiaozhi/requirements.txt
-!examples/xiaozhi/pyproject.toml
+!legacy/xiaozhi/src
+!legacy/xiaozhi/xiaozhi
+!legacy/xiaozhi/Cargo.toml
+!legacy/xiaozhi/Cargo.lock
+!legacy/xiaozhi/config.py
+!legacy/xiaozhi/main.py
+!legacy/xiaozhi/uv.lock
+!legacy/xiaozhi/.python-version
+!legacy/xiaozhi/requirements.txt
+!legacy/xiaozhi/pyproject.toml

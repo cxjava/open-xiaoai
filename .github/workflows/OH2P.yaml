@@ -18,7 +18,7 @@ jobs:
       - name: 🔥 构建固件
         id: build
         run: |
-          cd packages/client-patch
+          cd legacy/client-patch-ts
           docker run --rm -e OTA=${{ inputs.ota }} -v $(pwd)/assets:/app/assets -v $(pwd)/patches:/app/patches idootop/open-xiaoai:latest
           MODEL=$(cat assets/.model)
           VERSION=$(cat assets/.version)
@@ -40,4 +40,4 @@ jobs:
           prerelease: false
           makeLatest: latest
           removeArtifacts: true
-          artifacts: packages/client-patch/assets/*.squashfs
+          artifacts: legacy/client-patch-ts/assets/*.squashfs

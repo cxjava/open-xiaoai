@@ -10,14 +10,15 @@ version: 2
 
 before:
   hooks:
-    - sh -c "cd packages/client-go && go mod tidy && go mod download"
-    - sh -c "cd examples/gemini-go && go mod tidy && go mod download"
-    - sh -c "cd examples/chat-go && go mod tidy && go mod download"
+    - sh -c "cd apps/client && go mod tidy && go mod download"
+    - sh -c "cd pkg/music && go mod tidy && go mod download"
+    - sh -c "cd apps/gemini && go mod tidy && go mod download"
+    - sh -c "cd apps/chat && go mod tidy && go mod download"
 
 builds:
-  - id: client-go
-    dir: packages/client-go
-    binary: open-xiaoai-client-go
+  - id: client
+    dir: apps/client
+    binary: client
     main: ./cmd/client/
     env:
       - CGO_ENABLED=0
@@ -33,9 +34,9 @@ builds:
       - "6"
       - "7"
 
-  - id: gemini-go
-    dir: examples/gemini-go
-    binary: gemini-go
+  - id: gemini
+    dir: apps/gemini
+    binary: gemini
     main: .
     env:
       - CGO_ENABLED=0
@@ -48,9 +49,9 @@ builds:
     goarch:
       - amd64
       - arm64
-  - id: chat-go
-    dir: examples/chat-go
-    binary: chat-go
+  - id: chat
+    dir: apps/chat
+    binary: chat
     main: .
     env:
       - CGO_ENABLED=0
@@ -65,25 +66,25 @@ builds:
       - arm64
 
 upx:
-  - ids: [client-go, gemini-go, chat-go]
+  - ids: [client, gemini, chat]
     enabled: true
     
 archives:
-  - id: client-go
-    builds: [client-go]
+  - id: client
+    builds: [client]
     formats: [tar.gz]
     name_template: >-
-      open-xiaoai-client-go_
+      client_
       {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
-  - id: gemini-go
-    builds: [gemini-go]
+  - id: gemini
+    builds: [gemini]
     formats: [tar.gz]
     name_template: >-
-      gemini-go_
+      gemini_
       {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "386" }}i386
@@ -92,11 +93,11 @@ archives:
     format_overrides:
       - goos: windows
         formats: [zip]
-  - id: chat-go
-    builds: [chat-go]
+  - id: chat
+    builds: [chat]
     formats: [tar.gz]
     name_template: >-
-      chat-go_
+      chat_
       {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "386" }}i386

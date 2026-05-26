@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
 OUTPUT_DIR="$SCRIPT_DIR/dist"
-BINARY_NAME="gemini-go"
+BINARY_NAME="gemini"
 
 mkdir -p "$OUTPUT_DIR"
 

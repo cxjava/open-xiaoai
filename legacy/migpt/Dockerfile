@@ -4,8 +4,8 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 WORKDIR /app
 
-COPY examples/migpt .
-COPY packages/client-rust ./client-rust
+COPY legacy/migpt .
+COPY legacy/client-rust ./client-rust
 
 # 更新源
 RUN apt update && apt install curl build-essential -y
@@ -35,7 +35,7 @@ RUN npm install -g corepack \
     && pnpm install
 
 # 构建 Rust Server
-RUN sed -i 's/\.\.\/\.\.\/packages\///g' Cargo.toml \
+RUN sed -i 's/\.\.\///g' Cargo.toml \
     && pnpm build
 
 

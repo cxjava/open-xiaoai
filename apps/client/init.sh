@@ -30,7 +30,7 @@ if [ "$#" -eq 0 ]; then
     fi
 fi
 
-echo "🔥 正在启动 Client-Go..."
+echo "🔥 正在启动 Client..."
 echo "   工作目录: $WORK_DIR"
 echo "   启动参数: $*"
 

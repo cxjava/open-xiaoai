@@ -1,9 +1,9 @@
 set positional-arguments
 
 DIST := "dist"
-CLIENT_GO_PKG := "packages/client-go"
-CHAT_GO_PKG := "examples/chat-go"
-GEMINI_GO_PKG := "examples/gemini-go"
+CLIENT_PKG := "apps/client"
+CHAT_PKG := "apps/chat"
+GEMINI_PKG := "apps/gemini"
 
 default:
     just --list
@@ -11,7 +11,7 @@ default:
 # 格式化：go fmt + goimports（遍历所有 Go 模块）
 format:
     #!/usr/bin/env bash
-    for dir in packages/client-go packages/client-patch-go packages/music-go examples/chat-go examples/gemini-go; do
+    for dir in apps/client apps/chat apps/gemini pkg/music tools/client-patch; do
         if [ -d "$dir" ]; then
             echo "==> $dir"
             (cd "$dir" && go fmt ./... && goimports -w .)
@@ -21,7 +21,7 @@ format:
 # 仅运行 goimports -w .
 goimports:
     #!/usr/bin/env bash
-    for dir in packages/client-go packages/client-patch-go packages/music-go examples/chat-go examples/gemini-go; do
+    for dir in apps/client apps/chat apps/gemini pkg/music tools/client-patch; do
         if [ -d "$dir" ]; then
             echo "==> $dir"
             (cd "$dir" && goimports -w .)
@@ -30,11 +30,11 @@ goimports:
 install:
     go install golang.org/x/tools/cmd/goimports@latest
 
-# 构建全部常用产物：client-go、chat-go、gemini-go
-build: build-client-go build-chat-go build-gemini-go
+# 构建全部常用产物：client、chat、gemini
+build: build-client build-chat build-gemini
 
-# 构建 client-go，默认产物适用于小爱音箱 ARMv7
-build-client-go os="linux" arch="arm" arm="7":
+# 构建 client，默认产物适用于小爱音箱 ARMv7
+build-client os="linux" arch="arm" arm="7":
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "{{DIST}}"
@@ -43,10 +43,10 @@ build-client-go os="linux" arch="arm" arm="7":
         export GOARM="{{arm}}"
         suffix="v{{arm}}"
     fi
-    out="$PWD/{{DIST}}/open-xiaoai-client-go_{{os}}_{{arch}}${suffix}"
-    echo "==> build client-go: $out"
+    out="$PWD/{{DIST}}/client_{{os}}_{{arch}}${suffix}"
+    echo "==> build client: $out"
     (
-        cd "{{CLIENT_GO_PKG}}"
+        cd "{{CLIENT_PKG}}"
         CGO_ENABLED=0 GOOS="{{os}}" GOARCH="{{arch}}" go build -ldflags="-s -w" -o "$out" ./cmd/client/
     )
     if command -v upx >/dev/null 2>&1; then
@@ -56,15 +56,15 @@ build-client-go os="linux" arch="arm" arm="7":
     fi
     ls -lh "$out"
 
-# 构建 chat-go，默认产物适用于 Linux x86_64 服务器
-build-chat-go os="linux" arch="amd64":
+# 构建 chat，默认产物适用于 Linux x86_64 服务器
+build-chat os="linux" arch="amd64":
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "{{DIST}}"
-    out="$PWD/{{DIST}}/chat-go_{{os}}_{{arch}}"
-    echo "==> build chat-go: $out"
+    out="$PWD/{{DIST}}/chat_{{os}}_{{arch}}"
+    echo "==> build chat: $out"
     (
-        cd "{{CHAT_GO_PKG}}"
+        cd "{{CHAT_PKG}}"
         CGO_ENABLED=0 GOOS="{{os}}" GOARCH="{{arch}}" go build -ldflags="-s -w" -o "$out" .
     )
     if command -v upx >/dev/null 2>&1; then
@@ -74,15 +74,15 @@ build-chat-go os="linux" arch="amd64":
     fi
     ls -lh "$out"
 
-# 构建 gemini-go，默认产物适用于 Linux x86_64 服务器
-build-gemini-go os="linux" arch="amd64":
+# 构建 gemini，默认产物适用于 Linux x86_64 服务器
+build-gemini os="linux" arch="amd64":
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "{{DIST}}"
-    out="$PWD/{{DIST}}/gemini-go_{{os}}_{{arch}}"
-    echo "==> build gemini-go: $out"
+    out="$PWD/{{DIST}}/gemini_{{os}}_{{arch}}"
+    echo "==> build gemini: $out"
     (
-        cd "{{GEMINI_GO_PKG}}"
+        cd "{{GEMINI_PKG}}"
         CGO_ENABLED=0 GOOS="{{os}}" GOARCH="{{arch}}" go build -ldflags="-s -w" -o "$out" .
     )
     if command -v upx >/dev/null 2>&1; then
@@ -92,33 +92,33 @@ build-gemini-go os="linux" arch="amd64":
     fi
     ls -lh "$out"
 
-# 复制 client-go 到远程 SSH 主机
-copy-client-go host dest="/data/open-xiaoai/client" os="linux" arch="arm" arm="7":
+# 复制 client 到远程 SSH 主机
+copy-client host dest="/data/open-xiaoai/client" os="linux" arch="arm" arm="7":
     #!/usr/bin/env bash
     set -euo pipefail
-    just build-client-go "{{os}}" "{{arch}}" "{{arm}}"
+    just build-client "{{os}}" "{{arch}}" "{{arm}}"
     suffix=""
     if [ "{{arch}}" = "arm" ]; then
         suffix="v{{arm}}"
     fi
-    src="{{DIST}}/open-xiaoai-client-go_{{os}}_{{arch}}${suffix}"
+    src="{{DIST}}/client_{{os}}_{{arch}}${suffix}"
     remote_dir="$(dirname "{{dest}}")"
     dd if="$src" | tssh "{{host}}" "mkdir -p '$remote_dir' && dd of='{{dest}}' && chmod +x '{{dest}}'"
 
-# 复制 chat-go 到远程 SSH 主机
-copy-chat-go host dest="/root/open-xiaoai/chat-go" os="linux" arch="amd64":
+# 复制 chat 到远程 SSH 主机
+copy-chat host dest="/root/open-xiaoai/chat" os="linux" arch="amd64":
     #!/usr/bin/env bash
     set -euo pipefail
-    just build-chat-go "{{os}}" "{{arch}}"
-    src="{{DIST}}/chat-go_{{os}}_{{arch}}"
+    just build-chat "{{os}}" "{{arch}}"
+    src="{{DIST}}/chat_{{os}}_{{arch}}"
     remote_dir="$(dirname "{{dest}}")"
     dd if="$src" | ssh "{{host}}" "mkdir -p '$remote_dir' && dd of='{{dest}}' && chmod +x '{{dest}}'"
 
-# 复制 gemini-go 到远程 SSH 主机
-copy-gemini-go host dest="/root/open-xiaoai/gemini-go" os="linux" arch="amd64":
+# 复制 gemini 到远程 SSH 主机
+copy-gemini host dest="/root/open-xiaoai/gemini" os="linux" arch="amd64":
     #!/usr/bin/env bash
     set -euo pipefail
-    just build-gemini-go "{{os}}" "{{arch}}"
-    src="{{DIST}}/gemini-go_{{os}}_{{arch}}"
+    just build-gemini "{{os}}" "{{arch}}"
+    src="{{DIST}}/gemini_{{os}}_{{arch}}"
     remote_dir="$(dirname "{{dest}}")"
     dd if="$src" | ssh "{{host}}" "mkdir -p '$remote_dir' && dd of='{{dest}}' && chmod +x '{{dest}}'"
