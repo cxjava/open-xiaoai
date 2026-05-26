@@ -1,6 +1,7 @@
 package music
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -115,13 +116,31 @@ type Player struct {
 	lastPlayURLAt time.Time
 	// suppressUntil 显式抑制 OnPlayingStatus 处理的截止时间（Speak 期间会撑开此窗口）
 	suppressUntil time.Time
+
+	// initialStateCh 在收到第一个 playing 事件时关闭，用来给上层"等一下首个状态"的能力，
+	// 取代之前注释里建议的 Sleep 推断（不可靠）。
+	initialStateCh   chan struct{}
+	initialStateOnce sync.Once
 }
 
 // NewPlayer 创建播放器
 func NewPlayer(fs *FileServer, idx *Indexer) *Player {
 	return &Player{
-		fileServer: fs,
-		indexer:    idx,
+		fileServer:     fs,
+		indexer:        idx,
+		initialStateCh: make(chan struct{}),
+	}
+}
+
+// WaitInitialState 阻塞直到收到第一次 playing 事件，或 ctx 截止。
+// 返回 true 表示已经收到、CurrentState 的值现在是可信的；
+// 返回 false 表示超时，调用方应自行决定如何兜底。
+func (p *Player) WaitInitialState(ctx context.Context) bool {
+	select {
+	case <-p.initialStateCh:
+		return true
+	case <-ctx.Done():
+		return false
 	}
 }
 
@@ -404,6 +423,12 @@ func (p *Player) playItemLocked(item SongItem, recordHistory bool) bool {
 // 正常 case（歌真的播完）：currentSong != nil、过了 grace、不在 suppress 中、state == Playing
 // → 触发 nextLocked（按 mode 走顺序/循环/随机或重播当前）。
 func (p *Player) OnPlayingStatus(status string) {
+	// 收到第一次 playing 事件就算"初始状态可信"，不区分具体值。
+	// 放在锁外避免阻塞 close。
+	p.initialStateOnce.Do(func() {
+		close(p.initialStateCh)
+	})
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
 

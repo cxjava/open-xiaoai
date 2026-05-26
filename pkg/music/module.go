@@ -198,13 +198,26 @@ func (m *Module) OnEvent(event connect.Event) bool {
 
 // IsPlaying 当前是否处于播放中状态。
 // 用于上层（如 chat-go server）决定要不要播放欢迎语 / 提示语，避免打断正在播放的歌曲。
-// 注意：此值依赖最近一次 "playing" 事件，server 刚启动还没收到 playing 事件时会返回 false，
-// 调用方建议先 Sleep 一小段时间给 device 发 state，再检查。
+//
+// 注意：此值依赖最近一次 "playing" 事件，server 刚启动还没收到 playing 事件时会返回 false。
+// 如果调用方关心"启动期的真实状态"，请先用 WaitInitialState(ctx) 等到首个事件到达再读。
 func (m *Module) IsPlaying() bool {
 	if !m.config.Enabled || m.player == nil {
 		return false
 	}
 	return m.player.CurrentState() == StatePlaying
+}
+
+// WaitInitialState 阻塞直到收到首个 playing 事件或 ctx 截止。
+// 返回 true 表示后续 IsPlaying() 的值是可信的（device 已经汇报过状态）；
+// 返回 false 表示在给定时间内还没有收到事件——可能是 client 没连上，或者
+// 设备本身就是 Idle 没生成 playing 事件，调用方按需兜底。
+// 取代过去注释里"先 Sleep 几百毫秒"那种不可靠的等待。
+func (m *Module) WaitInitialState(ctx context.Context) bool {
+	if !m.config.Enabled || m.player == nil {
+		return false
+	}
+	return m.player.WaitInitialState(ctx)
 }
 
 // handleInstruction 处理语音指令：分类是否属于音乐模块的指令；如果是，
