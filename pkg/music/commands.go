@@ -99,8 +99,12 @@ type PlayIntent struct {
 	Episode    int    // 集数，0 表示未指定
 }
 
-// episodeRegex 匹配 第11集、11集、第11回、水浒传11、西游记第20集 等
-var episodeRegex = regexp.MustCompile(`(?:第)?(\d+)[集回]?`)
+// episodeRegex 仅匹配带显式集数标记（集/回）的表达：第11集、11集、第11回、水浒传第20集 等。
+//
+// 这里有意去掉了"裸数字"的兼容。之前的正则把 `集|回` 设成可选，会把"播放周杰伦88"
+// 解析为 series="周杰伦" episode=88，触发 SearchEpisode 走故事检索分支，普通歌手名带
+// 数字的关键词全部失配。如果用户明确想播某集，加上"集"/"回"即可。
+var episodeRegex = regexp.MustCompile(`(?:第)?(\d+)[集回]`)
 
 // ParsePlayIntent 从播放关键词中解析系列名和集数
 // 例如：「西游记11集」-> {SeriesName:"西游记", Episode:11}

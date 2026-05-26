@@ -46,3 +46,27 @@ func TestParsePlayIntentKeepsEpisodeAfterResourcePrefix(t *testing.T) {
 		t.Fatalf("expected episode 11, got %d", intent.Episode)
 	}
 }
+
+func TestParsePlayIntentDoesNotEatNakedTrailingNumber(t *testing.T) {
+	// 没有显式"集/回"后缀时，数字保留在 SeriesName 里，不当作集数。
+	cases := []struct {
+		in     string
+		series string
+		ep     int
+	}{
+		{"周杰伦88", "周杰伦88", 0},
+		{"5566", "5566", 0},
+		{"1995年", "1995年", 0},
+		{"播放周杰伦88", "播放周杰伦88", 0},
+		{"西游记11集", "西游记", 11},
+		{"水浒传第5集", "水浒传", 5},
+		{"西游记第20回", "西游记", 20},
+	}
+	for _, c := range cases {
+		got := ParsePlayIntent(c.in)
+		if got.SeriesName != c.series || got.Episode != c.ep {
+			t.Errorf("ParsePlayIntent(%q) = {%q, %d}, want {%q, %d}",
+				c.in, got.SeriesName, got.Episode, c.series, c.ep)
+		}
+	}
+}
