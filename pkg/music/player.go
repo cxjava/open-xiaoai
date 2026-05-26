@@ -325,6 +325,41 @@ func (p *Player) AbortXiaoAI() error {
 	return err
 }
 
+// ResetMediaPlayer 调 `ubus call mediaplayer player_reset` 把设备端整个
+// mediaplayer 状态机翻底重置：
+//
+//	mibrain_list_reset      —— 清掉云端 NLP 之前推过来的 album_playlist / track_list
+//	track_list_reset        —— 清掉当前 track 列表
+//	mi_player_reset         —— 重置内部播放器
+//	clear_tts_file          —— 清缓存 tts 文件
+//	reset last_dialog_id    —— 防止后续被识别成"上次对话"
+//
+// 这些字段是从 mediaplayer 二进制 strings 出来的内部实现细节，
+// 不在 ubus 文档里，但 player_reset 是 mediaplayer 暴露的合法 method。
+//
+// 解决的问题：
+//
+//	即使我们用 AbortXiaoAI() 把云端 NLP 杀掉，**之前** 云端已经 push 到
+//	mediaplayer 的 PlayList 还活着。当我们的本地歌播完一首、mediaplayer
+//	内部进入 Idle，它会按这张残留 PlayList 自动 next 到云端的下一项 →
+//	用户观感"随便听听之后被系统的随机插入了"。
+//
+// 因此每次 SetQueue（用户主动设新队列）前都要清一次。但 PlayURL 路径下不能
+// 调，否则我们队列内部切歌也会清掉自己。
+//
+// 副作用：会打断当前正在播放的内容。在 SetQueue 场景下这正是我们要的，
+// 因为下一行就是播自己队列的第一首。
+func (p *Player) ResetMediaPlayer() error {
+	log.Printf("🧹 [music/player] ResetMediaPlayer: 清 mediaplayer 内部 PlayList/track_list")
+	script := `ubus -t 2 call mediaplayer player_reset >/dev/null 2>&1 || true`
+	timeout := uint64(3000)
+	_, err := connect.GetRPC().CallRemote("run_shell", script, &timeout)
+	if err != nil {
+		log.Printf("⚠️ [music/player] ResetMediaPlayer 失败（可忽略）: %v", err)
+	}
+	return err
+}
+
 // StopTTS 停止 TTS 播报
 func (p *Player) StopTTS() error {
 	log.Printf("📝 [music/player] StopTTS (timeout=%dms)", stopTTSTimeoutMs)
@@ -360,7 +395,18 @@ func (p *Player) ClearQueue() {
 }
 
 // SetQueue 设置队列并播放第一首
+//
+// 在切到自己第一首之前先调 ResetMediaPlayer：
+// 把云端 NLP 之前 push 给 mediaplayer 的 PlayList/track_list 整张清掉。
+// 否则即便我们 PlayURL 单首本地歌，mediaplayer 内部 track_list 还活着，
+// 播完会自动 next 到云端那张表上，表现为"系统随机插入"。
+//
+// 重要：reset 要在拿锁之前 —— 它是个 RPC 调用，可能阻塞 ~100ms，
+// 不能压在 p.mu 上把其他 goroutine 卡住。
 func (p *Player) SetQueue(items []SongItem) bool {
+	if len(items) > 0 {
+		_ = p.ResetMediaPlayer()
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.queue = copySongItems(items)
