@@ -1,7 +1,9 @@
 package music
 
 import (
+	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -11,7 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"unsafe"
+	"time"
 )
 
 // FileServer HTTP 静态文件服务
@@ -20,6 +22,7 @@ type FileServer struct {
 	baseURL   string
 	port      int
 	allowList map[string]struct{}
+	srv       *http.Server
 }
 
 // NewFileServer 创建文件服务
@@ -94,7 +97,7 @@ func (s *FileServer) CreateFileURL(absPath string) string {
 	if _, ok := s.allowList[abs]; !ok {
 		return ""
 	}
-	hexPath := hex.EncodeToString(unsafe.Slice(unsafe.StringData(abs), len(abs)))
+	hexPath := hex.EncodeToString([]byte(abs))
 	filename := url.PathEscape(filepath.Base(abs))
 	return fmt.Sprintf("%s/file/%s/%s", s.baseURL, hexPath, filename)
 }
@@ -185,9 +188,34 @@ func (s *FileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, filepath.Base(absPath), info.ModTime(), f)
 }
 
-// Start 启动 HTTP 服务
+// Start 启动 HTTP 服务（阻塞直到 Shutdown 或出错）。
+// 用 *http.Server 持有实例，便于 Shutdown 优雅退出，避免 goroutine 泄漏。
 func (s *FileServer) Start() error {
+	s.mu.Lock()
 	addr := fmt.Sprintf(":%d", s.port)
+	s.srv = &http.Server{
+		Addr:              addr,
+		Handler:           s,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	srv := s.srv
+	s.mu.Unlock()
 	log.Printf("🌐 [music/http] 监听 %s, base_url=%s", addr, s.baseURL)
-	return http.ListenAndServe(addr, s)
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
+}
+
+// Shutdown 优雅关闭 HTTP 服务，最多等待 ctx 截止。
+func (s *FileServer) Shutdown(ctx context.Context) error {
+	s.mu.Lock()
+	srv := s.srv
+	s.srv = nil
+	s.mu.Unlock()
+	if srv == nil {
+		return nil
+	}
+	log.Printf("🌐 [music/http] Shutdown 中...")
+	return srv.Shutdown(ctx)
 }

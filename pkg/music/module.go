@@ -133,7 +133,17 @@ func (m *Module) Stop() error {
 		m.cancel = nil
 	}
 	m.refreshWg.Wait()
-	m.player.ClearQueue()
+	if m.fileSrv != nil {
+		// 给 HTTP server 留一点时间排空在途请求，避免 mediaplayer 半截读断流。
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		if err := m.fileSrv.Shutdown(shutdownCtx); err != nil {
+			log.Printf("⚠️ [music] HTTP shutdown 失败: %v", err)
+		}
+		cancel()
+	}
+	if m.player != nil {
+		m.player.ClearQueue()
+	}
 	log.Printf("🎵 [music] 已停止")
 	return nil
 }
