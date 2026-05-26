@@ -74,14 +74,11 @@ func (m *Module) Start(ctx context.Context) error {
 
 	m.player = NewPlayer(m.fileSrv, m.indexer)
 
+	// 先尝试加载磁盘缓存，让 Start 立刻就能用到已有曲库。
+	// 增量 Refresh 移到后台异步执行（10k+ FLAC 元数据可能需要几秒），
+	// 这段时间 Start 已经返回，HTTP 服务和事件处理都能正常工作。
 	if err := m.indexer.Load(); err != nil {
 		log.Printf("⚠️ [music] 加载曲库索引失败: %v", err)
-	}
-	if err := m.indexer.Refresh(); err != nil {
-		log.Printf("⚠️ [music] 刷新曲库失败: %v", err)
-	}
-	if err := m.indexer.Save(); err != nil {
-		log.Printf("⚠️ [music] 保存曲库索引失败: %v", err)
 	}
 
 	// 启动 HTTP 文件服务
@@ -92,6 +89,10 @@ func (m *Module) Start(ctx context.Context) error {
 		}
 	}()
 
+	// 后台首轮 Refresh：不阻塞 Start
+	m.refreshWg.Add(1)
+	go m.initialRefresh()
+
 	// 定时刷新
 	if m.config.Search.RefreshIntervalSec > 0 {
 		m.refreshWg.Add(1)
@@ -99,8 +100,24 @@ func (m *Module) Start(ctx context.Context) error {
 		go m.refreshLoop()
 	}
 
-	log.Printf("✅ [music] 模块已启动: HTTP %s, 曲库 %d 首", m.fileSrv.BaseURL(), len(m.indexer.Songs()))
+	log.Printf("✅ [music] 模块已启动: HTTP %s, 曲库缓存 %d 首 (首轮 Refresh 后台进行中)",
+		m.fileSrv.BaseURL(), len(m.indexer.Songs()))
 	return nil
+}
+
+// initialRefresh 启动后第一次同步磁盘的曲库 Refresh，跑在后台 goroutine。
+func (m *Module) initialRefresh() {
+	defer m.refreshWg.Done()
+	start := time.Now()
+	if err := m.indexer.Refresh(); err != nil {
+		log.Printf("⚠️ [music] 首轮刷新曲库失败: %v", err)
+		return
+	}
+	if err := m.indexer.Save(); err != nil {
+		log.Printf("⚠️ [music] 保存曲库索引失败: %v", err)
+	}
+	log.Printf("✅ [music] 首轮 Refresh 完成: %d 首, 耗时 %v",
+		len(m.indexer.Songs()), time.Since(start).Round(time.Millisecond))
 }
 
 // SetBaseURLForConnection 按当前连接设置 base_url，用于返回客户端可访问的音乐 URL
