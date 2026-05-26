@@ -27,6 +27,15 @@ type Module struct {
 	refreshWg    sync.WaitGroup
 	refreshingMu sync.Mutex
 	refreshing   bool
+
+	// instruction worker：所有语音指令的副作用（Speak/PlayURL/AbortXiaoAI）都
+	// 串行化到这条单 goroutine 队列，避免连续指令在 Speak 期间互相覆盖队列状态。
+	// pendingJob 只保留最新一条；后到指令会丢弃尚未执行的旧指令，符合用户"最后一句话生效"
+	// 的直觉。
+	jobMu      sync.Mutex
+	pendingJob func()
+	jobWake    chan struct{}
+	jobWg      sync.WaitGroup
 }
 
 type lxResolver interface {
@@ -50,6 +59,7 @@ func New(cfg *MusicConfig) *Module {
 		fileSrv: NewFileServer(&cfg.HTTP),
 		player:  nil, // 在 Start 时初始化，依赖 fileSrv 和 indexer
 		lx:      lx,
+		jobWake: make(chan struct{}, 1),
 	}
 }
 
@@ -88,6 +98,10 @@ func (m *Module) Start(ctx context.Context) error {
 			log.Printf("❌ [music] HTTP 服务异常: %v", err)
 		}
 	}()
+
+	// 指令串行化 worker
+	m.jobWg.Add(1)
+	go m.jobLoop()
 
 	// 后台首轮 Refresh：不阻塞 Start
 	m.refreshWg.Add(1)
@@ -150,6 +164,7 @@ func (m *Module) Stop() error {
 		m.cancel = nil
 	}
 	m.refreshWg.Wait()
+	m.jobWg.Wait()
 	if m.fileSrv != nil {
 		// 给 HTTP server 留一点时间排空在途请求，避免 mediaplayer 半截读断流。
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -192,7 +207,11 @@ func (m *Module) IsPlaying() bool {
 	return m.player.CurrentState() == StatePlaying
 }
 
-// handleInstruction 处理语音指令
+// handleInstruction 处理语音指令：分类是否属于音乐模块的指令；如果是，
+// 把副作用（Speak/PlayURL/AbortXiaoAI）派发到 jobLoop 串行执行后立即返回。
+// 这样：
+//  1. OnEvent 调用方不会被 Speak 阻塞 3-5s
+//  2. 连续两条音乐指令不会互相打架（旧的 pending 会被新的替换）
 func (m *Module) handleInstruction(event connect.Event) bool {
 	text := ParseInstructionUserText(event.Data)
 	if text == "" {
@@ -201,51 +220,119 @@ func (m *Module) handleInstruction(event connect.Event) bool {
 	normalized := NormalizedForMatch(text)
 	log.Printf("🎤 [music] instruction: raw=%q normalized=%q", text, normalized)
 
-	// 按优先级：stop > next/previous > modes > refresh > random > play
-	if m.matchExact(normalized, m.config.Commands.StopKeywords) {
-		log.Printf("🎯 [music] 命中 stop_keywords")
-		m.player.ClearQueue()
-		_ = m.player.Stop()
-		m.player.Speak("好的，已停止")
-		return true
+	job := m.classifyInstruction(text, normalized)
+	if job == nil {
+		// 非音乐指令保持当前播放，不主动 Stop / ClearQueue。
+		// 让 chat-go 的 AI engine 自己决定是否打断当前播放，music-go 不越权。
+		log.Printf("⏭️ [music] 非音乐指令，保持当前播放: %q", normalized)
+		return false
 	}
-	if m.matchExact(normalized, m.config.Commands.NextKeywords) {
-		log.Printf("🎯 [music] 命中 next_keywords")
-		return m.handleNext()
+	m.postJob(job)
+	return true
+}
+
+// classifyInstruction 把规范化文本映射到一个具体的执行闭包。
+// 返回 nil 表示这条指令不归音乐模块管。优先级：stop > next/previous > modes > refresh > random > play。
+func (m *Module) classifyInstruction(text, normalized string) func() {
+	switch {
+	case m.matchExact(normalized, m.config.Commands.StopKeywords):
+		return func() {
+			log.Printf("🎯 [music] 命中 stop_keywords")
+			m.player.ClearQueue()
+			_ = m.player.Stop()
+			m.player.Speak("好的，已停止")
+		}
+	case m.matchExact(normalized, m.config.Commands.NextKeywords):
+		return func() {
+			log.Printf("🎯 [music] 命中 next_keywords")
+			m.handleNext()
+		}
+	case m.matchExact(normalized, m.config.Commands.PreviousKeywords):
+		return func() {
+			log.Printf("🎯 [music] 命中 previous_keywords")
+			m.handlePrevious()
+		}
+	case m.matchExact(normalized, m.config.Commands.RepeatOneKeywords):
+		return func() {
+			log.Printf("🎯 [music] 命中 repeat_one_keywords")
+			m.handlePlaybackMode(PlaybackModeRepeatOne, "已切换到单曲循环")
+		}
+	case m.matchExact(normalized, m.config.Commands.RepeatAllKeywords):
+		return func() {
+			log.Printf("🎯 [music] 命中 repeat_all_keywords")
+			m.handlePlaybackMode(PlaybackModeRepeatAll, "已切换到全部循环")
+		}
+	case m.matchExact(normalized, m.config.Commands.ShuffleModeKeywords):
+		return func() {
+			log.Printf("🎯 [music] 命中 shuffle_mode_keywords")
+			m.handlePlaybackMode(PlaybackModeShuffle, "已切换到随机播放")
+		}
+	case m.matchExact(normalized, m.config.Commands.RefreshKeywords):
+		return func() {
+			log.Printf("🎯 [music] 命中 refresh_keywords")
+			m.handleRefresh(text)
+		}
+	case m.matchExact(normalized, m.config.Commands.RandomPlayKeywords):
+		return func() {
+			log.Printf("🎯 [music] 命中 random_play_keywords")
+			m.handleRandomPlay(text)
+		}
 	}
-	if m.matchExact(normalized, m.config.Commands.PreviousKeywords) {
-		log.Printf("🎯 [music] 命中 previous_keywords")
-		return m.handlePrevious()
+	if keyword := m.extractPlayKeyword(text); keyword != "" {
+		return func() {
+			log.Printf("🎯 [music] 命中 play_keywords: 提取关键词=%q", keyword)
+			m.handlePlay(keyword)
+		}
 	}
-	if m.matchExact(normalized, m.config.Commands.RepeatOneKeywords) {
-		log.Printf("🎯 [music] 命中 repeat_one_keywords")
-		return m.handlePlaybackMode(PlaybackModeRepeatOne, "已切换到单曲循环")
+	return nil
+}
+
+// postJob 把一个待执行的指令闭包交给 jobLoop。
+// 语义：pendingJob 只保留最新一条；如果旧的还没被 worker 取走，会直接被覆盖。
+// 这样"播放 A → 播放 B"在 worker 还在跑 A 的 Speak 时，A 完成后会跳过 B 之前那个被替换掉的旧指令，
+// 只跑用户最新说的那个。
+func (m *Module) postJob(job func()) {
+	m.jobMu.Lock()
+	displaced := m.pendingJob != nil
+	m.pendingJob = job
+	m.jobMu.Unlock()
+	if displaced {
+		log.Printf("🛎️ [music/worker] 旧 pending 指令被新指令覆盖")
 	}
-	if m.matchExact(normalized, m.config.Commands.RepeatAllKeywords) {
-		log.Printf("🎯 [music] 命中 repeat_all_keywords")
-		return m.handlePlaybackMode(PlaybackModeRepeatAll, "已切换到全部循环")
+	select {
+	case m.jobWake <- struct{}{}:
+	default:
 	}
-	if m.matchExact(normalized, m.config.Commands.ShuffleModeKeywords) {
-		log.Printf("🎯 [music] 命中 shuffle_mode_keywords")
-		return m.handlePlaybackMode(PlaybackModeShuffle, "已切换到随机播放")
+}
+
+// jobLoop 单 goroutine 串行执行 pending 指令，直到 ctx 取消。
+func (m *Module) jobLoop() {
+	defer m.jobWg.Done()
+	for {
+		select {
+		case <-m.ctx.Done():
+			log.Printf("🛎️ [music/worker] jobLoop 退出")
+			return
+		case <-m.jobWake:
+		}
+		for {
+			m.jobMu.Lock()
+			job := m.pendingJob
+			m.pendingJob = nil
+			m.jobMu.Unlock()
+			if job == nil {
+				break
+			}
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("❌ [music/worker] job panic: %v", r)
+					}
+				}()
+				job()
+			}()
+		}
 	}
-	if m.matchExact(normalized, m.config.Commands.RefreshKeywords) {
-		log.Printf("🎯 [music] 命中 refresh_keywords")
-		return m.handleRefresh(text)
-	}
-	if m.matchExact(normalized, m.config.Commands.RandomPlayKeywords) {
-		log.Printf("🎯 [music] 命中 random_play_keywords")
-		return m.handleRandomPlay(text)
-	}
-	keyword := m.extractPlayKeyword(text)
-	if keyword != "" {
-		log.Printf("🎯 [music] 命中 play_keywords: 提取关键词=%q", keyword)
-		return m.handlePlay(keyword)
-	}
-	// 非音乐指令保持当前播放，不主动 Stop / ClearQueue。
-	// 让 chat-go 的 AI engine 自己决定是否打断当前播放，music-go 不越权。
-	log.Printf("⏭️ [music] 非音乐指令，保持当前播放: %q", normalized)
-	return false
 }
 
 func (m *Module) matchExact(normalized string, keywords []string) bool {
