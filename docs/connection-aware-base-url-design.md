@@ -6,7 +6,7 @@
 
 ## 一、OnConnectionHost 为何「看起来没作用」？
 
-**gemini-go / chat-go 已集成 music-go**。当 `music.enabled: true` 时，`startServer` 传入非 nil 的 `OnConnectionHost` 回调，每次连接建立时会调用：
+**apps/gemini / apps/chat 已集成 pkg/music**。当 `music.enabled: true` 时，`startServer` 传入非 nil 的 `OnConnectionHost` 回调，每次连接建立时会调用：
 
 ```go
 onConnectionHost := func(host string) {
@@ -68,15 +68,15 @@ CreateFileURL 使用该 base_url 生成 URL
 
 | 组件 | 改动 |
 |------|------|
-| **music-go** | 新增 `SetBaseURLForConnection(host string)`，按连接动态设置 base_url |
-| **gemini-go / chat-go** | `handleConnection` 传入 `r`，在 `initConnection` 中根据 `r.Host` 计算并设置 base_url |
-| **client-go** | 支持多地址连接：先试 LAN，失败再试 Tailscale |
+| **pkg/music** | 新增 `SetBaseURLForConnection(host string)`，按连接动态设置 base_url |
+| **apps/gemini / apps/chat** | `handleConnection` 传入 `r`，在 `initConnection` 中根据 `r.Host` 计算并设置 base_url |
+| **apps/client** | 支持多地址连接：先试 LAN，失败再试 Tailscale |
 
 ---
 
 ## 五、详细设计
 
-### 5.1 music-go
+### 5.1 pkg/music
 
 **新增接口**：
 
@@ -97,7 +97,7 @@ func (m *Module) SetBaseURLForConnection(host string)
 - 已有 `SetBaseURL`，可直接复用
 - `SetBaseURLForConnection` 内部调用 `fileSrv.SetBaseURL("http://" + host + ":port")`
 
-### 5.2 gemini-go / chat-go
+### 5.2 apps/gemini / apps/chat
 
 **handleConnection 签名**：
 
@@ -131,7 +131,7 @@ func initConnection(conn *websocket.Conn, r *http.Request, cfg *AppConfig) {
 handleConnection(conn, r, cfg)  // 传入 r 而非 r.RemoteAddr
 ```
 
-### 5.3 client-go
+### 5.3 apps/client
 
 **目标**：支持「先 LAN 后 Tailscale」的自动切换。
 
@@ -188,16 +188,16 @@ for each url in server_urls:
 
 | 阶段 | 内容 |
 |------|------|
-| 1 | music-go: `SetBaseURLForConnection(host string)` ✅ |
-| 2 | gemini-go / chat-go: 传入 `r`，在 initConnection 中设置 base_url ✅ |
-| 3 | client-go: 支持多 server URL 按序尝试 ✅ |
+| 1 | pkg/music: `SetBaseURLForConnection(host string)` ✅ |
+| 2 | apps/gemini / apps/chat: 传入 `r`，在 initConnection 中设置 base_url ✅ |
+| 3 | apps/client: 支持多 server URL 按序尝试 ✅ |
 
 ## 八、集成 music 时
 
-当 gemini-go 或 chat-go 集成 music-go 时，在 main 中传入回调即可：
+当 apps/gemini 或 apps/chat 集成 pkg/music 时，在 main 中传入回调即可：
 
 ```go
-// gemini-go main.go
+// apps/gemini main.go
 var musicModule *music.Module
 if cfg.Music.Enabled {
     musicModule = music.New(&cfg.Music)

@@ -55,7 +55,7 @@ docker run --rm idootop/open-xiaoai-runtime:oh2p \
 git clone https://github.com/idootop/open-xiaoai.git
 
 # 进入当前项目根目录
-cd packages/runtime
+cd tools/runtime
 
 # 【重要】将新的 `root.squashfs` 放到当前目录
 

@@ -28,14 +28,14 @@
 > [!CAUTION]
 > 刷机有风险，操作需谨慎。刷机可能会造成设备失去保修资格，变砖无法运行等。请自行评估相关风险，一切后果自负！🚨
 
-首先，下载或自行制作[补丁固件](../packages/client-patch/README.md)，重命名为 `root_patched.squashfs`。
+首先，下载或自行制作[补丁固件](../tools/client-patch/README.md)，重命名为 `root_patched.squashfs`。
 
 然后，下载刷机工具：https://androidmtk.com/download-amlogic-flash-tool
 
 把下载好的刷机工具文件夹解压到桌面，重命名为 `Amlogic_Flash_Tool_v6.0.0`
 
 > [!TIP]
-> 如果你是 macOS 系统，请到此处下载[刷机工具和使用教程](../packages/flash-tool/README.md)。
+> 如果你是 macOS 系统，请到此处下载[刷机工具和使用教程](../tools/flash/README.md)。
 
 ![](./images/driver.jpg)
 
@@ -95,7 +95,7 @@ ssh -o HostKeyAlgorithms=+ssh-rsa root@你的小爱音箱局域网IP地址
 > - 你设置的启动分区（boot0）是否和你刷写的系统分区（system0）一致（修改启动分区之后，需要 `saveenv` 才会保存生效）
 > - 你的电脑和小爱音箱是否处在同一网络环境下（可以更换路由器试试看）
 > - 你的内网防火墙是否屏蔽了 22 端口（SSH 默认连接端口）
-> - 如果你是自己构建的补丁固件，请检查 SSH 相关的 [patch](../packages/client-patch/patches/01-ssh.patch) 是否生效
+> - 如果你是自己构建的补丁固件，请检查 SSH 相关的 [patch](../tools/client-patch/patches/01-ssh.patch) 是否生效
 
 ### 更新系统
 

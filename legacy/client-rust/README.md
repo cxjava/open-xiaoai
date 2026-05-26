@@ -52,7 +52,7 @@ reboot
 git clone https://github.com/idootop/open-xiaoai.git
 
 # 进入当前项目根目录
-cd packages/client-rust
+cd legacy/client-rust
 
 # 交叉编译
 cross build --release --target armv7-unknown-linux-gnueabihf

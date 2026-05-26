@@ -1,4 +1,7 @@
-# OpenXiaoAI Patch
+# OpenXiaoAI Patch (TypeScript, legacy)
+
+> [!IMPORTANT]
+> 这是 TypeScript / Node.js 版本的补丁工具，已被 [tools/client-patch](../../tools/client-patch/README.md) 的 Go 版替代。本版本仅保留供 GitHub Actions 兼容现有固件 release 流程，日常使用请直接用 Go 版。
 
 > [!CAUTION]
 > 刷机有风险，操作需谨慎。请勿下载使用不明来历的固件！
@@ -77,7 +80,7 @@ SSH_PASSWORD=open-xiaoai
 git clone https://github.com/idootop/open-xiaoai.git
 
 # 进入当前项目根目录
-cd packages/client-patch
+cd legacy/client-patch-ts
 
 # 使用 Docker 进行构建
 docker run -it --rm \
@@ -103,7 +106,7 @@ docker run -it --rm \
 git clone https://github.com/idootop/open-xiaoai.git
 
 # 进入当前项目根目录
-cd packages/client-patch
+cd legacy/client-patch-ts
 
 # 安装依赖
 npm install

@@ -1,6 +1,6 @@
 # Open-XiaoAI Client (Go)
 
-使用 Go 编写的小爱音箱补丁程序，是 [client-rust](../client-rust/README.md) 的 Go 实现版本。
+使用 Go 编写的小爱音箱补丁程序，是 [legacy/client-rust](../../legacy/client-rust/README.md) 的 Go 实现版本。
 
 ## 功能
 
@@ -18,11 +18,10 @@
 # 创建目录
 mkdir /data/open-xiaoai
 
-# 下载 client-go（小爱音箱 Pro / ARMv7）
-curl -L -o /tmp/open-xiaoai-client-go.tar.gz \
-  https://github.com/cxjava/open-xiaoai/releases/latest/download/open-xiaoai-client-go_Linux_armv7.tar.gz
-tar -xzf /tmp/open-xiaoai-client-go.tar.gz -C /data/open-xiaoai
-mv /data/open-xiaoai/open-xiaoai-client-go /data/open-xiaoai/client
+# 下载 client（小爱音箱 Pro / ARMv7）
+curl -L -o /tmp/client.tar.gz \
+  https://github.com/cxjava/open-xiaoai/releases/latest/download/client_Linux_armv7.tar.gz
+tar -xzf /tmp/client.tar.gz -C /data/open-xiaoai
 chmod +x /data/open-xiaoai/client
 
 # 运行（替换成你的 server 地址）
@@ -31,7 +30,7 @@ chmod +x /data/open-xiaoai/client
 # 多地址：按顺序尝试，支持 LAN + Tailscale 等场景（在家用 LAN，带回老家用 Tailscale）
 /data/open-xiaoai/client ws://192.168.1.100:4399 ws://my-server:4399
 
-# 切换模式：gemini-go 与 chat-go 语音切换
+# 切换模式：apps/gemini 与 apps/chat 语音切换
 /data/open-xiaoai/client -switch ws://你的IP:4399 ws://你的IP:4400
 
 # 若服务端启用了认证，在 URL 中携带用户名和密码：
@@ -50,7 +49,7 @@ echo "ws://你的server地址:4399" > /data/open-xiaoai/server.txt
 
 # 下载启动脚本
 curl -L -o /data/open-xiaoai/init.sh \
-  https://raw.githubusercontent.com/idootop/open-xiaoai/main/packages/client-go/init.sh
+  https://raw.githubusercontent.com/idootop/open-xiaoai/main/apps/client/init.sh
 chmod +x /data/open-xiaoai/init.sh
 
 # 启动
@@ -69,7 +68,7 @@ chmod +x /data/open-xiaoai/init.sh
 ```shell
 # 下载 boot.sh 文件到 /data/init.sh 开机时自启动
 curl -L -o /data/init.sh \
-  https://raw.githubusercontent.com/idootop/open-xiaoai/main/packages/client-go/boot.sh
+  https://raw.githubusercontent.com/idootop/open-xiaoai/main/apps/client/boot.sh
 chmod +x /data/init.sh
 
 # 重启小爱音箱
@@ -77,7 +76,7 @@ reboot
 ```
 
 > [!IMPORTANT]
-> 先运行 Server 端（如 chat-go、gemini-go）获取地址，再启动 Client。不要连接来路不明的 server 🚨
+> 先运行 Server 端（如 apps/chat、apps/gemini）获取地址，再启动 Client。不要连接来路不明的 server 🚨
 
 ## 编译
 
@@ -88,10 +87,10 @@ reboot
 ### 本地编译
 
 ```shell
-cd packages/client-go
+cd apps/client
 
 # 构建（当前平台）
-go build -o open-xiaoai-client ./cmd/client/
+go build -o client ./cmd/client/
 
 # 或使用 build.sh（同时生成 ARM 交叉编译版本）
 bash build.sh
@@ -101,14 +100,14 @@ bash build.sh
 
 ```shell
 CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 \
-  go build -ldflags="-s -w" -o open-xiaoai-client-arm7 ./cmd/client/
+  go build -ldflags="-s -w" -o client-arm7 ./cmd/client/
 ```
 
 ### 部署到小爱音箱
 
 ```shell
 # 方式一：dd + ssh 直接传输（build.sh 输出在 dist/）
-dd if=dist/open-xiaoai-client-arm7 \
+dd if=dist/client-arm7 \
   | ssh -o HostKeyAlgorithms=+ssh-rsa root@音箱IP "dd of=/data/open-xiaoai/client"
 
 # 方式二：先上传到可下载地址，再在音箱上 curl 下载
@@ -119,10 +118,10 @@ chmod +x /data/open-xiaoai/client
 # 若服务端启用认证，在 URL 中携带 ?username=admin&password=123 或 ?u=admin&p=123
 ```
 
-## 与 client-rust 对比
+## 与 legacy/client-rust 对比
 
-| 维度 | client-rust | client-go |
-|------|-------------|-----------|
+| 维度 | legacy/client-rust | apps/client |
+|------|--------------------|-------------|
 | 构建 | Rust + cross + Docker | `go build` 原生交叉编译 |
 | 二进制 | ~1-3 MB | ~5 MB（ldflags -s -w） |
 | 依赖 | 7 个 crate | 2 个（websocket + uuid） |
@@ -143,12 +142,12 @@ chmod +x /data/open-xiaoai/client
 
 适用于：音箱在家连局域网，带回老家后通过 Tailscale 连接。Server 会根据客户端连接方式返回对应的音乐 URL，详见 [connection-aware-base-url-design](../../docs/connection-aware-base-url-design.md)。
 
-### 切换模式：gemini-go / chat-go 语音切换
+### 切换模式：apps/gemini / apps/chat 语音切换
 
-传 `-switch` 时，多地址用于不同 Server（如 gemini-go 与 chat-go），说切换词即可切换：
+传 `-switch` 时，多地址用于不同 Server（如 apps/gemini 与 apps/chat），说切换词即可切换：
 
 ```shell
-# gemini-go 默认 4399，chat-go 需配置为 4400
+# apps/gemini 默认 4399，apps/chat 需配置为 4400
 ./client -switch ws://你的IP:4399 ws://你的IP:4400
 ```
 
@@ -165,7 +164,7 @@ chmod +x /data/open-xiaoai/client
 
 ## 认证
 
-若服务端（chat-go / gemini-go）启用了认证（`auth.users` 非空），客户端需在连接 URL 中携带有效凭据：
+若服务端（apps/chat / apps/gemini）启用了认证（`auth.users` 非空），客户端需在连接 URL 中携带有效凭据：
 
 ```
 ws://server地址:4399?username=alice&password=password123
@@ -183,4 +182,4 @@ ws://server地址:4399?u=alice&p=password123
 
 - 当前仅支持 **小爱音箱 Pro（LX06）** 和 **Xiaomi 智能音箱 Pro（OH2P）**
 - 公网部署时请注意安全，默认提供执行任意脚本能力
-- 通信协议与 client-rust 兼容，可连接同一 Server 端
+- 通信协议与 legacy/client-rust 兼容，可连接同一 Server 端

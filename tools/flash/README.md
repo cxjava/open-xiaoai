@@ -24,7 +24,7 @@ brew install libusb-compat
 git clone https://github.com/idootop/open-xiaoai.git
 
 # 进入当前项目根目录
-cd packages/flash-tool
+cd tools/flash
 
 # 授予可运行权限
 chmod +x ./flash

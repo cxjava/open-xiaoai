@@ -1,8 +1,8 @@
 # Open-XiaoAI x Chat (Go)
 
-**文本流式 + TTS**：小爱音箱接入 OpenAI 兼容 API 的 Go 实现，是 [migpt](../migpt/README.md) 的完全重写版本。
+**文本流式 + TTS**：小爱音箱接入 OpenAI 兼容 API 的 Go 实现，是 [legacy/migpt](../../legacy/migpt/README.md) 的完全重写版本。
 
-相比原版 MiGPT，该版本可完美打断小爱回复，响应延迟更低。支持 **GPT、Claude、DeepSeek、通义千问** 等（文本流式 + TTS 播放）。与 gemini-go 的实时音频不同，chat-go 为文本流式 + TTS 模式。Claude 可通过 [OpenRouter](https://openrouter.ai) 使用。
+相比原版 MiGPT，该版本可完美打断小爱回复，响应延迟更低。支持 **GPT、Claude、DeepSeek、通义千问** 等（文本流式 + TTS 播放）。与 apps/gemini 的实时音频不同，apps/chat 为文本流式 + TTS 模式。Claude 可通过 [OpenRouter](https://openrouter.ai) 使用。
 
 ## 功能
 
@@ -16,12 +16,12 @@
 ## 快速开始
 
 > [!NOTE]
-> 需先在小爱音箱上运行 [client-go](../../packages/client-go/README.md) 或 client-rust 补丁程序。
+> 需先在小爱音箱上运行 [apps/client](../client/README.md) 或 legacy/client-rust 补丁程序。
 
 ### 1. 编辑配置
 
 ```shell
-cd examples/chat-go
+cd apps/chat
 vim config.yaml
 ```
 
@@ -47,12 +47,12 @@ llm:
 bash build.sh
 
 # 运行（默认读取 config.yaml）
-./dist/chat-go
+./dist/chat
 
 # 指定配置文件
-./dist/chat-go -config /path/to/config.yaml
+./dist/chat -config /path/to/config.yaml
 
-# 与 gemini-go 同时运行：将 chat-go 改为 4400 端口（config.yaml 中 server.port: 4400）
+# 与 apps/gemini 同时运行：将 apps/chat 改为 4400 端口（config.yaml 中 server.port: 4400）
 # 音箱上 client 使用切换模式：./client -switch ws://IP:4399 ws://IP:4400
 ```
 
@@ -81,7 +81,7 @@ bash build.sh
 
 ## 本地音乐
 
-已集成 [music-go](../../packages/music-go/README.md)。在 `config.yaml` 中启用：
+已集成 [pkg/music](../../pkg/music/README.md)。在 `config.yaml` 中启用：
 
 ```yaml
 music:
@@ -102,14 +102,14 @@ custom_replies:
     url: "https://example.com/hello.mp3"
 ```
 
-## 与 migpt 对比
+## 与 legacy/migpt 对比
 
-| 维度 | migpt (Node.js + Rust) | chat-go |
-|------|------------------------|--------|
+| 维度 | legacy/migpt (Node.js + Rust) | apps/chat |
+|------|-------------------------------|-----------|
 | 构建 | Node.js 22 + pnpm + Rust + Neon | `go build` |
 | 部署 | Docker 或 Node 环境 | 单二进制 |
 | 配置 | TypeScript 代码 | YAML 文件 |
-| 依赖 | @mi-gpt/engine + neon | go-openai + client-go |
+| 依赖 | @mi-gpt/engine + neon | go-openai + apps/client |
 
 ## 注意事项
 

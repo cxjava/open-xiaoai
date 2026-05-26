@@ -4,52 +4,59 @@
 
 Open-XiaoAI 通过运行在音箱上的 client 补丁程序，把小爱音箱的语音识别、音频输入、播放状态和远程执行能力交给你自己的 Server。你可以接入 Chat 类大模型、Gemini Live 实时语音模型，也可以让音箱播放本地音乐、网络音乐，并借助 LX Sync Server 搜索和下载歌曲。
 
-当前重点维护的 `client-go`、`chat-go`、`gemini-go` 和 `music-go` 都是使用 Golang 重写的新版本，目标是减少运行时依赖，尽量用单二进制完成部署。
+当前重点维护的 `apps/client`、`apps/chat`、`apps/gemini` 和 `pkg/music` 都是使用 Golang 重写的新版本，目标是减少运行时依赖，尽量用单二进制完成部署。
 
 <img src="./docs/images/cover.jpg" alt="Open-XiaoAI cover" width="400">
 
 ## 你可以用它做什么
 
-- 接入 `chat-go`：把小爱音箱接到 OpenAI 兼容接口，支持 GPT、Claude、DeepSeek、通义千问等 Chat AI。
-- 接入 `gemini-go`：把小爱音箱接到 Gemini Live API，走端到端实时语音对话。
-- 启用 `music-go`：用语音播放本地歌曲、故事、有声书，支持上一首、下一首、随机播放、循环模式和自动切歌。
+- 接入 `apps/chat`：把小爱音箱接到 OpenAI 兼容接口，支持 GPT、Claude、DeepSeek、通义千问等 Chat AI。
+- 接入 `apps/gemini`：把小爱音箱接到 Gemini Live API，走端到端实时语音对话。
+- 启用 `pkg/music`：用语音播放本地歌曲、故事、有声书，支持上一首、下一首、随机播放、循环模式和自动切歌。
 - 播放网络歌曲：本地曲库找不到时，调用 LX Sync Server 搜索歌曲并获取播放链接。
 - 下载网络歌曲：开启 `music.lx.download` 后，通过 LX Sync Server 的代理下载能力把歌曲保存到本地目录，再播放本地文件。
 - 自己扩展能力：Server 端收到音箱事件后可以接任意 AI、Agent、脚本或家庭自动化逻辑。
 
 ## 项目结构
 
-`packages/client-go` 是运行在小爱音箱上的 Go 客户端，是旧版 client-rust 的 Golang 重写版本。它负责连接 Server、上报语音识别结果和播放状态、转发音频流，并响应 Server 发来的播放、TTS、Shell RPC 等指令。
+仓库按角色组织：
 
-`examples/chat-go` 是文本流式 + TTS 模式的 Go AI Server，是 MiGPT 类能力的 Golang 重写版本, 单二进制部署。用户说话后，Server 将语音识别文本发送给 OpenAI 兼容 API，流式接收回答，并逐句让小爱音箱播放 TTS。它适合接入 GPT、Claude、DeepSeek、通义千问等 Chat AI，也适合做关键词触发、可打断的语音助手。
+- `apps/`：可独立部署的二进制（`client`、`chat`、`gemini`），各自带 `go.mod`、`build.sh` 与 `README.md`
+- `pkg/`：被 `apps/` 中模块 import 的可复用 Go 库（目前只有 `music`）
+- `tools/`：一次性 / 辅助工具（刷机、固件补丁、QEMU 调试环境）
+- `legacy/`：历史与实验示例（旧 Rust client、TS 版 patch、xiaozhi、migpt、stereo、kws、早期 gemini）
 
-`examples/gemini-go` 是 Gemini Live API 实时语音模式的 Go AI Server，是旧版 Gemini 示例的 Golang 重写版本, 单二进制部署。它把音箱麦克风 PCM 音频发给 Gemini Live，再把 Gemini 返回的 PCM 音频播放到音箱。它不依赖 TTS，适合更自然的实时语音对话。
+`apps/client` 是运行在小爱音箱上的 Go 客户端，是旧版 [`legacy/client-rust`](legacy/client-rust/README.md) 的 Golang 重写版本。它负责连接 Server、上报语音识别结果和播放状态、转发音频流，并响应 Server 发来的播放、TTS、Shell RPC 等指令。
 
-`packages/music-go` 是可复用音乐模块，目前集成在 `chat-go` 中。它可以扫描本地音乐目录，建立曲库索引，响应“播放稻香”“下一首”“随便听听”等语音指令；本地找不到时，还可以通过 LX Sync Server 搜索、播放或下载网络歌曲。
+`apps/chat` 是文本流式 + TTS 模式的 Go AI Server，是 MiGPT 类能力的 Golang 重写版本, 单二进制部署。用户说话后，Server 将语音识别文本发送给 OpenAI 兼容 API，流式接收回答，并逐句让小爱音箱播放 TTS。它适合接入 GPT、Claude、DeepSeek、通义千问等 Chat AI，也适合做关键词触发、可打断的语音助手。
+
+`apps/gemini` 是 Gemini Live API 实时语音模式的 Go AI Server，是旧版 Gemini 示例的 Golang 重写版本, 单二进制部署。它把音箱麦克风 PCM 音频发给 Gemini Live，再把 Gemini 返回的 PCM 音频播放到音箱。它不依赖 TTS，适合更自然的实时语音对话。
+
+`pkg/music` 是可复用音乐模块，目前集成在 `apps/chat` 中。它可以扫描本地音乐目录，建立曲库索引，响应“播放稻香”“下一首”“随便听听”等语音指令；本地找不到时，还可以通过 LX Sync Server 搜索、播放或下载网络歌曲。
 
 整体链路：
 
 ```text
-小爱音箱 client-go
+小爱音箱 apps/client
   -> WebSocket
-  -> chat-go / gemini-go / 自定义 Server
+  -> apps/chat / apps/gemini / 自定义 Server
   -> AI 模型、LX Sync Server、本地音乐文件、脚本或其他服务
   -> 小爱音箱播放语音或音乐
 ```
 
 ## 选择哪个 Server
 
-如果你想接入 ChatGPT、Claude、DeepSeek、通义千问等文本模型，优先使用 `chat-go`。它是文本流式 + TTS 模式，支持关键词触发、关键词/唤醒词打断、上下文历史、自定义回复，并且已经集成 `music-go`。
+如果你想接入 ChatGPT、Claude、DeepSeek、通义千问等文本模型，优先使用 `apps/chat`。它是文本流式 + TTS 模式，支持关键词触发、关键词/唤醒词打断、上下文历史、自定义回复，并且已经集成 `pkg/music`。
 
-如果你想体验 Gemini Live API 的实时语音对话，使用 `gemini-go`。它是麦克风 PCM 到 Gemini Live，再到音箱 PCM 播放的实时音频链路。当前是半双工模式，AI 说话时不能中途打断。
+如果你想体验 Gemini Live API 的实时语音对话，使用 `apps/gemini`。它是麦克风 PCM 到 Gemini Live，再到音箱 PCM 播放的实时音频链路。当前是半双工模式，AI 说话时不能中途打断。
 
-如果你主要想让小爱音箱变成本地音乐播放器，使用 `chat-go + music-go`。`music-go` 会先搜索本地曲库；只要本地有命中，就播放本地文件，不会触发远程搜索。只有本地完全找不到普通歌曲时，才会进入 LX Sync Server 在线兜底。
+如果你主要想让小爱音箱变成本地音乐播放器，使用 `apps/chat + pkg/music`。`pkg/music` 会先搜索本地曲库；只要本地有命中，就播放本地文件，不会触发远程搜索。只有本地完全找不到普通歌曲时，才会进入 LX Sync Server 在线兜底。
 
 ## 核心能力
 
-### chat-go：接入 Chat AI
+### apps/chat：接入 Chat AI
 
-`chat-go` 是推荐的通用 AI 助手入口。它支持 OpenAI 兼容的 Chat Completions 接口，因此可以接入：
+`apps/chat` 是推荐的通用 AI 助手入口。它支持 OpenAI 兼容的 Chat Completions 接口，因此可以接入：
 
 - OpenAI GPT 系列
 - Claude（可通过 OpenRouter）
@@ -63,13 +70,13 @@ Open-XiaoAI 通过运行在音箱上的 client 补丁程序，把小爱音箱的
 - 支持按关键词触发 AI，避免小爱每句话都交给模型。
 - 支持关键词或唤醒词打断正在播放的 AI 回复。
 - 支持自定义固定回复，包括文字回复和音频 URL。
-- 集成 `music-go`，可以同时做 AI 助手和音乐播放器。
+- 集成 `pkg/music`，可以同时做 AI 助手和音乐播放器。
 
-文档：[`examples/chat-go/README.md`](examples/chat-go/README.md)
+文档：[`apps/chat/README.md`](apps/chat/README.md)
 
-### gemini-go：接入 Gemini Live AI
+### apps/gemini：接入 Gemini Live AI
 
-`gemini-go` 面向实时语音对话。它不走文本 TTS，而是把小爱音箱麦克风音频直接送到 Gemini Live API，再把 Gemini 返回的音频播放出来。
+`apps/gemini` 面向实时语音对话。它不走文本 TTS，而是把小爱音箱麦克风音频直接送到 Gemini Live API，再把 Gemini 返回的音频播放出来。
 
 它的特点：
 
@@ -78,11 +85,11 @@ Open-XiaoAI 通过运行在音箱上的 client 补丁程序，把小爱音箱的
 - 单 Go 二进制部署。
 - 半双工设计：AI 说话时屏蔽麦克风，避免回声。
 
-文档：[`examples/gemini-go/README.md`](examples/gemini-go/README.md)
+文档：[`apps/gemini/README.md`](apps/gemini/README.md)
 
-### music-go：本地音乐、网络音乐与下载
+### pkg/music：本地音乐、网络音乐与下载
 
-`music-go` 是 `chat-go` 的音乐模块。启用后，你可以直接对小爱说：
+`pkg/music` 是 `apps/chat` 的音乐模块。启用后，你可以直接对小爱说：
 
 ```text
 播放稻香
@@ -143,10 +150,10 @@ music:
 
 - 如果你说“播放稻香”，本地曲库能找到《稻香》，就直接播放本地文件。
 - 如果你说“播放周杰伦”，本地曲库里有周杰伦的歌，就播放本地搜索到的周杰伦歌曲列表。
-- 如果本地没有《稻香》，你可以说“播放周杰伦的稻香”，`music-go` 会调用 LX Sync Server 搜索；若 `download: true`，会下载为 `稻香 - 周杰伦.mp3` 后播放。
+- 如果本地没有《稻香》，你可以说“播放周杰伦的稻香”，`pkg/music` 会调用 LX Sync Server 搜索；若 `download: true`，会下载为 `稻香 - 周杰伦.mp3` 后播放。
 - 只要本地有任何命中，就不会触发 LX 远程搜索或下载。
 
-文档：[`packages/music-go/README.md`](packages/music-go/README.md)
+文档：[`pkg/music/README.md`](pkg/music/README.md)
 
 ## 快速开始
 
@@ -163,12 +170,12 @@ docs/flash.md
 
 刷机教程：[`docs/flash.md`](docs/flash.md)
 
-### 2. 在音箱上运行 client-go
+### 2. 在音箱上运行 client
 
-`client-go` 负责连接你的 Server。下载和运行方式见：
+`apps/client` 负责连接你的 Server。下载和运行方式见：
 
 ```text
-packages/client-go/README.md
+apps/client/README.md
 ```
 
 常见运行方式：
@@ -177,43 +184,43 @@ packages/client-go/README.md
 /data/open-xiaoai/client ws://你的server地址:4399
 ```
 
-如果你想同时运行 `gemini-go` 和 `chat-go`，可以使用切换模式：
+如果你想同时运行 `apps/gemini` 和 `apps/chat`，可以使用切换模式：
 
 ```shell
 /data/open-xiaoai/client -switch ws://你的IP:4399 ws://你的IP:4400
 ```
 
-文档：[`packages/client-go/README.md`](packages/client-go/README.md)
+文档：[`apps/client/README.md`](apps/client/README.md)
 
-### 3. 运行 chat-go
+### 3. 运行 chat
 
 ```shell
-cd examples/chat-go
+cd apps/chat
 vim config.yaml
 bash build.sh
-./dist/chat-go -config config.yaml
+./dist/chat -config config.yaml
 ```
 
-默认监听 `ws://0.0.0.0:4399`。如果要和 `gemini-go` 同时运行，可以把 `chat-go` 改到 `4400` 端口。
+默认监听 `ws://0.0.0.0:4399`。如果要和 `apps/gemini` 同时运行，可以把 `apps/chat` 改到 `4400` 端口。
 
-文档：[`examples/chat-go/README.md`](examples/chat-go/README.md)
+文档：[`apps/chat/README.md`](apps/chat/README.md)
 
-### 4. 运行 gemini-go
+### 4. 运行 gemini
 
 ```shell
-cd examples/gemini-go
+cd apps/gemini
 vim config.yaml
 bash build.sh
-./dist/gemini-go -config config.yaml
+./dist/gemini -config config.yaml
 ```
 
 需要先在 Google AI Studio 创建 Gemini API Key，也可以用环境变量 `GEMINI_API_KEY`。
 
-文档：[`examples/gemini-go/README.md`](examples/gemini-go/README.md)
+文档：[`apps/gemini/README.md`](apps/gemini/README.md)
 
-### 5. 启用 music-go
+### 5. 启用 pkg/music
 
-`music-go` 通过 `chat-go` 的 `config.yaml` 启用：
+`pkg/music` 通过 `apps/chat` 的 `config.yaml` 启用：
 
 ```yaml
 music:
@@ -226,13 +233,15 @@ music:
 
 ## 旧版示例与更多能力
 
-仓库里仍保留了一些历史示例和实验能力，可按需参考：
+仓库里仍保留了一些历史示例和实验能力，统一归档在 `legacy/` 下，可按需参考：
 
-- [`examples/xiaozhi`](examples/xiaozhi/README.md)：小爱音箱接入小智 AI。
-- [`examples/kws`](examples/kws/README.md)：自定义唤醒词。
-- [`examples/migpt`](examples/migpt/README.md)：MiGPT 完美版示例。
-- [`examples/gemini`](examples/gemini/README.md)：早期 Gemini 示例。
-- [`examples/stereo`](examples/stereo/README.md)：小爱音箱组立体声。
+- [`legacy/xiaozhi`](legacy/xiaozhi/README.md)：小爱音箱接入小智 AI。
+- [`legacy/kws`](legacy/kws/README.md)：自定义唤醒词。
+- [`legacy/migpt`](legacy/migpt/README.md)：MiGPT 完美版示例。
+- [`legacy/gemini`](legacy/gemini/README.md)：早期 Gemini 示例（Rust + Python 版）。
+- [`legacy/stereo`](legacy/stereo/README.md)：小爱音箱组立体声。
+- [`legacy/client-rust`](legacy/client-rust/README.md)：Rust 版 client（已被 `apps/client` 替代）。
+- [`legacy/client-patch-ts`](legacy/client-patch-ts/README.md)：TypeScript 版固件补丁工具（已被 [`tools/client-patch`](tools/client-patch/README.md) 替代）。
 
 ## 相关项目
 

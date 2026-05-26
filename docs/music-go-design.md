@@ -1,6 +1,6 @@
-# music-go 模块设计方案
+# pkg/music 模块设计方案
 
-> 可复用的本地音乐播放模块，供 chat-go、gemini-go 等集成。纯 Go 实现，无 ffmpeg 依赖，通过监听客户端上报的 `playing` 事件实现自动切歌。
+> 可复用的本地音乐播放模块，供 apps/chat、apps/gemini 等集成。纯 Go 实现，无 ffmpeg 依赖，通过监听客户端上报的 `playing` 事件实现自动切歌。
 
 ---
 
@@ -8,13 +8,13 @@
 
 | 项目 | 方案 |
 |------|------|
-| 包路径 | `packages/music-go` |
+| 包路径 | `pkg/music` |
 | 配置 | `music.enabled` + `music.dirs` + `music.http` 等 |
 | 集成 | 父模块 `OnEvent` 中先调 `music.OnEvent(event)`，返回 true 则跳过 AI |
 | 文件服务 | 独立 HTTP 端口 18080，`/file/{hex}/{filename}`，白名单 |
 | 元数据 | dhowden/tag，无 ffmpeg |
 | 自动切歌 | 监听 `playing` 事件，`Idle` 时播下一首 |
-| 依赖 | client-go（connect 包）、dhowden/tag |
+| 依赖 | apps/client（connect 包）、dhowden/tag |
 
 ---
 
@@ -22,8 +22,8 @@
 
 ### 1.1 目标
 
-- **独立模块**：`packages/music-go` 作为可复用包
-- **配置驱动**：在 chat-go/gemini-go 的 config 中增加 `music` 配置块即可启用
+- **独立模块**：`pkg/music` 作为可复用包
+- **配置驱动**：在 apps/chat / apps/gemini 的 config 中增加 `music` 配置块即可启用
 - **静态 HTTP 服务**：将本地音乐目录映射为局域网 URL，供音箱拉取
 - **自动切歌**：基于客户端上报的 `playing` 事件，监听 `Playing → Idle` 触发下一首
 
@@ -48,9 +48,10 @@
 ## 二、目录结构
 
 ```
-packages/
-├── client-go/
-├── music-go/
+apps/
+├── client/
+pkg/
+├── music/
 │   ├── config.go        # MusicConfig 及默认值
 │   ├── module.go        # Module 主入口：New/Start/Stop/OnEvent
 │   ├── indexer.go       # 曲库索引（tag 元数据）
@@ -281,7 +282,7 @@ playing 事件 status == "Paused":
 
 **instruction 数据格式**：兼容 Go client `{Type:"NewLine", Line:"..."}` 与 Rust client `{NewLine:"..."}`。内层 JSON 需 `header.namespace=="SpeechRecognizer"`、`name=="RecognizeResult"`、`payload.is_final==true`，取 `results[0].text`。
 
-**处理顺序**：按优先级判断 stop > refresh > random > play。未命中音乐指令时，music-go 不主动停止或恢复播放，交由上层 AI engine 决定是否打断。
+**处理顺序**：按优先级判断 stop > refresh > random > play。未命中音乐指令时，pkg/music 不主动停止或恢复播放，交由上层 AI engine 决定是否打断。
 
 ---
 
@@ -340,27 +341,27 @@ playing 事件 status == "Paused":
 | 3 | commands 解析、instruction 处理、队列管理 |
 | 4 | playing 事件、Idle 自动切歌 |
 | 5 | 定时刷新循环 |
-| 6 | chat-go / gemini-go 集成与联调 |
+| 6 | apps/chat / apps/gemini 集成与联调 |
 
 ---
 
 ## 十、依赖
 
 ```go
-module github.com/cxjava/open-xiaoai/packages/music-go
+module github.com/cxjava/open-xiaoai/pkg/music
 
 require (
     github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
-    github.com/cxjava/open-xiaoai/packages/client-go v0.0.0
+    github.com/cxjava/open-xiaoai/apps/client v0.0.0
 )
 ```
 
-chat-go/gemini-go 增加 `require music-go` 及 `replace` 指向 `../../packages/music-go`。
+apps/chat / apps/gemini 增加 `require pkg/music` 及 `replace` 指向 `../../pkg/music`。
 
 ---
 
 ## 十一、待确认
 
 1. **base_url**：自动检测 + 可配置覆盖。建议在 README 中说明：多网卡或复杂网络时建议显式配置。
-2. **playing 事件结构**：client-go 的 `SendEvent("playing", status)` 传入 `PlayingStatus` 字符串，故 `event.Data` 为 JSON 字符串 `"Playing"`/`"Paused"`/`"Idle"`。
+2. **playing 事件结构**：apps/client 的 `SendEvent("playing", status)` 传入 `PlayingStatus` 字符串，故 `event.Data` 为 JSON 字符串 `"Playing"`/`"Paused"`/`"Idle"`。
 3. **多连接**：当前按单连接设计；多音箱场景需 per-connection 队列时再扩展。

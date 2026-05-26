@@ -1,8 +1,8 @@
-# music-go
+# pkg/music
 
-可复用的本地音乐播放模块，目前由 [chat-go](../../examples/chat-go/README.md) 集成。纯 Go 实现，无 ffmpeg 依赖，通过监听客户端上报的 `playing` 事件实现自动切歌。
+可复用的本地音乐播放模块，目前由 [apps/chat](../../apps/chat/README.md) 集成。纯 Go 实现，无 ffmpeg 依赖，通过监听客户端上报的 `playing` 事件实现自动切歌。
 
-> ℹ️ **gemini-go 不集成本模块**：gemini-go 是纯实时对话场景（半双工），不会消费 `instruction` 事件。如需本地音乐能力请使用 chat-go。
+> ℹ️ **apps/gemini 不集成本模块**：apps/gemini 是纯实时对话场景（半双工），不会消费 `instruction` 事件。如需本地音乐能力请使用 apps/chat。
 
 ## 功能
 
@@ -194,7 +194,7 @@ music:
 
 #### 本地优先与远程触发规则
 
-`music-go` 永远先搜本地曲库。只要本地有任何命中，就直接播放本地结果，不会触发 LX 远程搜索或下载。
+`pkg/music` 永远先搜本地曲库。只要本地有任何命中，就直接播放本地结果，不会触发 LX 远程搜索或下载。
 
 例如本地还没有下载《稻香》时，可以说：
 
@@ -247,7 +247,7 @@ music:
 
 ## 集成方式
 
-在父模块（chat-go）中：
+在父模块（apps/chat）中：
 
 ```go
 // 1. 在 config 结构体中增加 Music 字段
@@ -297,7 +297,7 @@ startServer(ctx, cfg, onConnectionHost)  // 或 startServer(ctx, engine, onConne
 
 ## playing 事件
 
-client-go 的 `SendEvent("playing", status)` 传入 `PlayingStatus` 字符串，故 `event.Data` 为 JSON 字符串：
+apps/client 的 `SendEvent("playing", status)` 传入 `PlayingStatus` 字符串，故 `event.Data` 为 JSON 字符串：
 
 - `"Playing"`：正在播放
 - `"Paused"`：暂停（不触发切歌）
@@ -308,4 +308,4 @@ client-go 的 `SendEvent("playing", status)` 传入 `PlayingStatus` 字符串，
 ## 依赖
 
 - `github.com/dhowden/tag`：音频元数据提取
-- `github.com/cxjava/open-xiaoai/packages/client-go`：connect 包（RPC、Event）
+- `github.com/cxjava/open-xiaoai/apps/client`：connect 包（RPC、Event）

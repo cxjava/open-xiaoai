@@ -7,7 +7,7 @@
 ## 快速开始
 
 > [!NOTE]
-> 继续下面的操作之前，你需要先在小爱音箱上启动运行 Rust 补丁程序 [👉 教程](../../packages/client-rust/README.md)
+> 继续下面的操作之前，你需要先在小爱音箱上启动运行 Rust 补丁程序 [👉 教程](../client-rust/README.md)
 
 首先，克隆仓库代码到本地。
 
@@ -16,7 +16,7 @@
 git clone https://github.com/idootop/open-xiaoai.git
 
 # 进入当前项目根目录
-cd examples/migpt
+cd legacy/migpt
 ```
 
 然后把 `config.ts` 文件里的配置修改成你自己的。
