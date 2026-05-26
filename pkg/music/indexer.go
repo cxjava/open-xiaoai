@@ -127,8 +127,15 @@ func (i *Indexer) Save() error {
 	if err != nil {
 		return fmt.Errorf("marshal index: %w", err)
 	}
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		return fmt.Errorf("write index: %w", err)
+	// 原子写：写到同目录 tmp 文件后 rename，避免进程被 kill 时残留半截 JSON
+	// 让下次 Load() 失败。
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0644); err != nil {
+		return fmt.Errorf("write index tmp: %w", err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("rename index: %w", err)
 	}
 	log.Printf("💾 [music/idx] 已保存索引: %d 首 → %s (%d KB)", len(songs), path, len(data)/1024)
 	return nil
