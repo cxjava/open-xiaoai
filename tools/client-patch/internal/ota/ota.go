@@ -13,9 +13,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/cxjava/open-xiaoai/client-patch-go/internal/account"
-	"github.com/cxjava/open-xiaoai/client-patch-go/internal/logger"
-	"github.com/cxjava/open-xiaoai/client-patch-go/internal/mina"
+	"github.com/cxjava/open-xiaoai/tools/client-patch/internal/account"
+	"github.com/cxjava/open-xiaoai/tools/client-patch/internal/logger"
+	"github.com/cxjava/open-xiaoai/tools/client-patch/internal/mina"
 )
 
 const otaSecret = "8007236f-a2d6-4847-ac83-c49395ad6d65"

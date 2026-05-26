@@ -13,10 +13,10 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/cxjava/open-xiaoai/packages/client-go/base"
-	"github.com/cxjava/open-xiaoai/packages/client-go/services/connect"
-	"github.com/cxjava/open-xiaoai/packages/client-go/utils"
-	"github.com/cxjava/open-xiaoai/packages/music-go"
+	"github.com/cxjava/open-xiaoai/apps/client/base"
+	"github.com/cxjava/open-xiaoai/apps/client/services/connect"
+	"github.com/cxjava/open-xiaoai/apps/client/utils"
+	"github.com/cxjava/open-xiaoai/pkg/music"
 )
 
 func parseBasicAuth(r *http.Request) (username, password string, ok bool) {

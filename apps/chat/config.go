@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cxjava/open-xiaoai/packages/music-go"
+	"github.com/cxjava/open-xiaoai/pkg/music"
 	"gopkg.in/yaml.v3"
 )
 

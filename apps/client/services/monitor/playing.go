@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cxjava/open-xiaoai/packages/client-go/utils"
+	"github.com/cxjava/open-xiaoai/apps/client/utils"
 )
 
 type PlayingStatus string

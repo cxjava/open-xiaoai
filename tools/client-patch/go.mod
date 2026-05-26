@@ -1,4 +1,4 @@
-module github.com/cxjava/open-xiaoai/client-patch-go
+module github.com/cxjava/open-xiaoai/tools/client-patch
 
 go 1.26
 

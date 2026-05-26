@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cxjava/open-xiaoai/client-patch-go/internal/account"
-	"github.com/cxjava/open-xiaoai/client-patch-go/internal/logger"
+	"github.com/cxjava/open-xiaoai/tools/client-patch/internal/account"
+	"github.com/cxjava/open-xiaoai/tools/client-patch/internal/logger"
 	"github.com/google/uuid"
 )
 

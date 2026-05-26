@@ -1,10 +1,10 @@
-module github.com/cxjava/open-xiaoai/examples/gemini-go
+module github.com/cxjava/open-xiaoai/apps/gemini
 
 go 1.26
 
 require (
 	github.com/coder/websocket v1.8.14
-	github.com/cxjava/open-xiaoai/packages/client-go v0.0.0
+	github.com/cxjava/open-xiaoai/apps/client v0.0.0
 	google.golang.org/genai v1.57.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -38,4 +38,4 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-replace github.com/cxjava/open-xiaoai/packages/client-go => ../../packages/client-go
+replace github.com/cxjava/open-xiaoai/apps/client => ../client

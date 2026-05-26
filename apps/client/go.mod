@@ -1,4 +1,4 @@
-module github.com/cxjava/open-xiaoai/packages/client-go
+module github.com/cxjava/open-xiaoai/apps/client
 
 go 1.26
 

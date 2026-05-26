@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cxjava/open-xiaoai/packages/client-go/services/connect"
+	"github.com/cxjava/open-xiaoai/apps/client/services/connect"
 )
 
 // Module 音乐模块主入口
