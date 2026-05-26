@@ -98,10 +98,12 @@ func searchScore(s IndexedSong, kw string) int {
 	if kw == "" {
 		return 0
 	}
-	name := strings.ToLower(s.NameLower)
-	title := strings.ToLower(s.TitleLower)
-	artist := strings.ToLower(s.ArtistLower)
-	album := strings.ToLower(s.AlbumLower)
+	// 索引时已经全部小写化（字段名带 *Lower）；这里直接复用，
+	// 不再重复 ToLower。Path 不在索引里没有 *Lower 形式，仍然需要转一次。
+	name := s.NameLower
+	title := s.TitleLower
+	artist := s.ArtistLower
+	album := s.AlbumLower
 	path := strings.ToLower(s.Path)
 
 	switch {

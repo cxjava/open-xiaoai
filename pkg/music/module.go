@@ -359,12 +359,12 @@ func (m *Module) matchExact(normalized string, keywords []string) bool {
 }
 
 func (m *Module) extractPlayKeyword(text string) string {
+	norm := NormalizedForMatch(text)
 	for _, kw := range m.config.Commands.PlayKeywords {
 		kwNorm := NormalizedForMatch(kw)
 		if kwNorm == "" {
 			continue
 		}
-		norm := NormalizedForMatch(text)
 		if strings.HasPrefix(norm, kwNorm) {
 			suffix := strings.TrimPrefix(norm, kwNorm)
 			return Normalize(strings.TrimSpace(suffix))
