@@ -178,9 +178,18 @@ func (p *Player) WaitInitialState(ctx context.Context) bool {
 //	  "Playing CPMedia, in wakeup period, end lock_start" → "stop player!" 会找到我们刚
 //	  PlayURL 的歌，把它停掉。实机表现：GET 文件成功、Playing 短暂上报，1 秒后变 Idle 无声。
 //
-//	✓ **本方案**：先 wakeup_stop（此时 PlayList 是空的，stop 不会误杀我们的歌）+
-//	  player_play_operation play（把 mediaplayer 切到 "ready" 模式）→ sleep 让状态稳定 →
-//	  再下发 player_play_url，URL 直接进入正常播放流程，不再被 wakeup 缓存机制拦截。
+//	✓ **本方案**：player_reset（彻底清掉云端 push 来的 PlayList/track_list/wakeup 状态机
+//	  等所有内部状态）+ player_play_operation play（把 mediaplayer 切到 "ready" 模式）→
+//	  sleep 让状态稳定 → 再下发 player_play_url，URL 直接进入正常播放流程。
+//
+// 关于 player_reset 放在头：
+//
+//	这条是 SetQueue 路径专门用来打掉云端残留 PlayList 的，但放在 PlayURL 头部对所有调用路径
+//	都安全：
+//	  - SetQueue → playItemLocked → PlayURL：必须 reset，否则播完一首被云端 PlayList 接管
+//	  - 自动续播 OnPlayingStatus("Idle") → playItemLocked → PlayURL：此时 mediaplayer 已经 Idle，
+//	    reset 没影响。我们队列里 s[i]→s[i+1] 用同一个 PlayURL，不要再多分支
+//	  - 用户 Next/Previous → PlayURL：reset 顺手打断 s[i]，正合心意
 //
 // 用 `;` 而非 `&&`，保证每一步都执行（前一步失败也不阻断后续）。
 //
@@ -197,8 +206,8 @@ func (p *Player) PlayURL(url string) error {
 	}
 	log.Printf("🌐 [music/player] PlayURL → 设备: %s", url)
 	script := fmt.Sprintf(
-		// `ubus -t 1 call mediaplayer player_wakeup '{"action":"stop"}' >/dev/null 2>&1 ; `+
-		`ubus -t 2 call mediaplayer player_play_operation '{"action":"play","media":"common"}' >/dev/null 2>&1 ; `+
+		`ubus -t 2 call mediaplayer player_reset >/dev/null 2>&1 ; `+
+			`ubus -t 2 call mediaplayer player_play_operation '{"action":"play","media":"common"}' >/dev/null 2>&1 ; `+
 			`sleep 0.1 ; `+
 			`ubus -t 5 call mediaplayer player_play_url '{"url":"%s","type":1}' || true`,
 		url,
@@ -396,17 +405,10 @@ func (p *Player) ClearQueue() {
 
 // SetQueue 设置队列并播放第一首
 //
-// 在切到自己第一首之前先调 ResetMediaPlayer：
-// 把云端 NLP 之前 push 给 mediaplayer 的 PlayList/track_list 整张清掉。
-// 否则即便我们 PlayURL 单首本地歌，mediaplayer 内部 track_list 还活着，
-// 播完会自动 next 到云端那张表上，表现为"系统随机插入"。
-//
-// 重要：reset 要在拿锁之前 —— 它是个 RPC 调用，可能阻塞 ~100ms，
-// 不能压在 p.mu 上把其他 goroutine 卡住。
+// 不需要在这里单独 ResetMediaPlayer——PlayURL 的 shell pipeline 头部已经带了
+// player_reset，会把云端 push 给 mediaplayer 的 PlayList/track_list 一并清掉。
+// 留作独立公共方法是为了"显式 reset 但不立即播放"的场景（比如停止后清后台）。
 func (p *Player) SetQueue(items []SongItem) bool {
-	if len(items) > 0 {
-		_ = p.ResetMediaPlayer()
-	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.queue = copySongItems(items)
