@@ -49,7 +49,7 @@ echo "ws://你的server地址:4399" > /data/open-xiaoai/server.txt
 
 # 下载启动脚本
 curl -L -o /data/open-xiaoai/init.sh \
-  https://raw.githubusercontent.com/idootop/open-xiaoai/main/apps/client/init.sh
+  https://raw.githubusercontent.com/cxjava/open-xiaoai/main/apps/client/init.sh
 chmod +x /data/open-xiaoai/init.sh
 
 # 启动
@@ -68,7 +68,7 @@ chmod +x /data/open-xiaoai/init.sh
 ```shell
 # 下载 boot.sh 文件到 /data/init.sh 开机时自启动
 curl -L -o /data/init.sh \
-  https://raw.githubusercontent.com/idootop/open-xiaoai/main/apps/client/boot.sh
+  https://raw.githubusercontent.com/cxjava/open-xiaoai/main/apps/client/boot.sh
 chmod +x /data/init.sh
 
 # 重启小爱音箱
