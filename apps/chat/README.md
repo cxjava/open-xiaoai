@@ -1,8 +1,8 @@
 # Open-XiaoAI x Chat (Go)
 
-**文本流式 + TTS**：小爱音箱接入 OpenAI 兼容 API 的 Go 实现，是 [legacy/migpt](../../legacy/migpt/README.md) 的完全重写版本。
+**文本流式 + TTS**：小爱音箱接入 OpenAI 兼容 API 的 Go Server，单二进制部署。
 
-相比原版 MiGPT，该版本可完美打断小爱回复，响应延迟更低。支持 **GPT、Claude、DeepSeek、通义千问** 等（文本流式 + TTS 播放）。与 apps/gemini 的实时音频不同，apps/chat 为文本流式 + TTS 模式。Claude 可通过 [OpenRouter](https://openrouter.ai) 使用。
+支持 **GPT、Claude、DeepSeek、通义千问** 等（文本流式 + TTS 播放）。与 apps/gemini 的实时音频不同，apps/chat 为文本流式 + TTS 模式，可完美打断小爱回复，响应延迟低。Claude 可通过 [OpenRouter](https://openrouter.ai) 使用。
 
 ## 功能
 
@@ -16,9 +16,31 @@
 ## 快速开始
 
 > [!NOTE]
-> 需先在小爱音箱上运行 [apps/client](../client/README.md) 或 legacy/client-rust 补丁程序。
+> 需先在小爱音箱上运行 [apps/client](../client/README.md) 补丁程序。
 
-### 1. 编辑配置
+### 1. 获取二进制
+
+**方式 A：从 Releases 下载预编译二进制（推荐）**
+
+```shell
+# Linux x86_64
+curl -L -o /tmp/chat.tar.gz \
+  https://github.com/cxjava/open-xiaoai/releases/latest/download/chat_Linux_x86_64.tar.gz
+tar -xzf /tmp/chat.tar.gz -C /opt/open-xiaoai-chat
+
+# macOS arm64 / Windows amd64 等其他平台请到 Releases 页选择对应包
+```
+
+Releases 同时提供 `chat_Linux_arm64`、`chat_Darwin_x86_64`、`chat_Darwin_arm64`、`chat_Windows_x86_64.zip` 等。
+
+**方式 B：从源码构建**
+
+```shell
+cd apps/chat
+bash build.sh   # 产物在 dist/chat
+```
+
+### 2. 编辑配置
 
 ```shell
 cd apps/chat
@@ -40,23 +62,20 @@ llm:
 #   model: "anthropic/claude-3.5-sonnet"
 ```
 
-### 2. 构建运行
+### 3. 运行
 
 ```shell
-# 构建
-bash build.sh
-
-# 运行（默认读取 config.yaml）
-./dist/chat
+# 默认读取当前目录的 config.yaml
+./chat
 
 # 指定配置文件
-./dist/chat -config /path/to/config.yaml
+./chat -config /path/to/config.yaml
 
 # 与 apps/gemini 同时运行：将 apps/chat 改为 4400 端口（config.yaml 中 server.port: 4400）
 # 音箱上 client 使用切换模式：./client -switch ws://IP:4399 ws://IP:4400
 ```
 
-### 3. 连接音箱
+### 4. 连接音箱
 
 确保小爱音箱的 client 已连接到本机 `ws://你的IP:4399`。
 
@@ -101,15 +120,6 @@ custom_replies:
   - match: "测试播放音乐"
     url: "https://example.com/hello.mp3"
 ```
-
-## 与 legacy/migpt 对比
-
-| 维度 | legacy/migpt (Node.js + Rust) | apps/chat |
-|------|-------------------------------|-----------|
-| 构建 | Node.js 22 + pnpm + Rust + Neon | `go build` |
-| 部署 | Docker 或 Node 环境 | 单二进制 |
-| 配置 | TypeScript 代码 | YAML 文件 |
-| 依赖 | @mi-gpt/engine + neon | go-openai + apps/client |
 
 ## 注意事项
 

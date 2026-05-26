@@ -25,13 +25,16 @@ func main() {
 	debugVersion := os.Getenv("DEBUG_VERSION")
 	otaEnv := os.Getenv("OTA")
 
-	if miDID == "" {
-		fmt.Println("❌ 请设置 MI_DID 环境变量（小爱音箱名称）")
-		os.Exit(1)
-	}
-	if passToken == "" && (miUser == "" || miPass == "") {
-		fmt.Println("❌ 请设置 MI_USER/MI_PASS 或 MI_TOKEN 环境变量")
-		os.Exit(1)
+	// OTA 环境变量优先：CI 等场景下，使用预先获取的 OTA 信息，不依赖小米账号登录
+	if otaEnv == "" {
+		if miDID == "" {
+			fmt.Println("❌ 请设置 MI_DID 环境变量（小爱音箱名称）")
+			os.Exit(1)
+		}
+		if passToken == "" && (miUser == "" || miPass == "") {
+			fmt.Println("❌ 请设置 MI_USER/MI_PASS 或 MI_TOKEN 环境变量")
+			os.Exit(1)
+		}
 	}
 
 	acc := &account.MiAccount{

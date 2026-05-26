@@ -1,6 +1,6 @@
 # Open-XiaoAI Client (Go)
 
-使用 Go 编写的小爱音箱补丁程序，是 [legacy/client-rust](../../legacy/client-rust/README.md) 的 Go 实现版本。
+使用 Go 编写的小爱音箱补丁程序，跑在小爱音箱上，把音箱的麦克风、播放状态、shell 等能力通过 WebSocket 暴露给 Server 端。
 
 ## 功能
 
@@ -118,15 +118,6 @@ chmod +x /data/open-xiaoai/client
 # 若服务端启用认证，在 URL 中携带 ?username=admin&password=123 或 ?u=admin&p=123
 ```
 
-## 与 legacy/client-rust 对比
-
-| 维度 | legacy/client-rust | apps/client |
-|------|--------------------|-------------|
-| 构建 | Rust + cross + Docker | `go build` 原生交叉编译 |
-| 二进制 | ~1-3 MB | ~5 MB（ldflags -s -w） |
-| 依赖 | 7 个 crate | 2 个（websocket + uuid） |
-| 协议 | 完全一致 | 完全一致 |
-
 ## 多地址：两种模式
 
 多地址时需区分用途，通过 `-switch` 参数选择：
@@ -182,4 +173,3 @@ ws://server地址:4399?u=alice&p=password123
 
 - 当前仅支持 **小爱音箱 Pro（LX06）** 和 **Xiaomi 智能音箱 Pro（OH2P）**
 - 公网部署时请注意安全，默认提供执行任意脚本能力
-- 通信协议与 legacy/client-rust 兼容，可连接同一 Server 端

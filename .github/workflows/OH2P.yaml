@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       ota:
-        description: " 请输入 OTA 版本信息"
+        description: " 请输入 OTA 版本信息（JSON：{\"url\":\"...\",\"model\":\"OH2P\",\"version\":\"1.58.6\"}）"
         type: string
         required: true
 
@@ -15,19 +15,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: 🐹 安装 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: 🛠️ 安装固件构建依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            python3 squashfs-tools file patch openssl xz-utils
+
       - name: 🔥 构建固件
         id: build
+        env:
+          OTA: ${{ inputs.ota }}
+        working-directory: tools/client-patch
         run: |
-          cd legacy/client-patch-ts
-          docker run --rm -e OTA=${{ inputs.ota }} -v $(pwd)/assets:/app/assets -v $(pwd)/patches:/app/patches idootop/open-xiaoai:latest
+          bash build.sh
           MODEL=$(cat assets/.model)
           VERSION=$(cat assets/.version)
           TAG=${MODEL}_${VERSION}
-          FIRMWARE=$(basename $(ls \assets/*.bin 2>/dev/null | head -n 1) .bin)
+          FIRMWARE=$(basename $(ls assets/*.bin 2>/dev/null | head -n 1) .bin)
           cp assets/$FIRMWARE/root.squashfs assets/${TAG}.squashfs
           cp assets/$FIRMWARE/root-patched.squashfs assets/${TAG}_patched.squashfs
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT
+
       - name: ✅ 发布固件
         uses: ncipollo/release-action@v1
         with:
@@ -40,4 +55,4 @@ jobs:
           prerelease: false
           makeLatest: latest
           removeArtifacts: true
-          artifacts: legacy/client-patch-ts/assets/*.squashfs
+          artifacts: tools/client-patch/assets/*.squashfs

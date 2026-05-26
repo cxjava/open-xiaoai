@@ -1,6 +1,6 @@
 # Open-XiaoAI x Gemini Live API (Go)
 
-**实时音频（Gemini Live）**：小爱音箱接入 [Gemini Live API](https://ai.google.dev/gemini-api/docs/live) 的 Go 实现，是 [legacy/gemini](../../legacy/gemini/README.md) 的完全重写版本。
+**实时音频（Gemini Live）**：小爱音箱接入 [Gemini Live API](https://ai.google.dev/gemini-api/docs/live) 的 Go Server，单二进制部署。
 
 端到端语音流：麦克风 PCM → Gemini Live API → 音频 PCM 回放。Gemini 自带 VAD，支持连续对话，无需 TTS。
 
@@ -19,13 +19,28 @@
 > 需先到 [Google AI Studio](https://aistudio.google.com) 注册并[创建 API 密钥](https://aistudio.google.com/apikey)。
 
 > [!NOTE]
-> 需先在小爱音箱上运行 [apps/client](../client/README.md) 或 legacy/client-rust 补丁程序，否则收不到音频输入。
+> 需先在小爱音箱上运行 [apps/client](../client/README.md) 补丁程序，否则收不到音频输入。
 
-### 1. 构建
+### 1. 获取二进制
+
+**方式 A：从 Releases 下载预编译二进制（推荐）**
+
+```shell
+# Linux x86_64
+curl -L -o /tmp/gemini.tar.gz \
+  https://github.com/cxjava/open-xiaoai/releases/latest/download/gemini_Linux_x86_64.tar.gz
+tar -xzf /tmp/gemini.tar.gz -C /opt/open-xiaoai-gemini
+
+# macOS arm64 / Windows amd64 等其他平台请到 Releases 页选择对应包
+```
+
+Releases 同时提供 `gemini_Linux_arm64`、`gemini_Darwin_x86_64`、`gemini_Darwin_arm64`、`gemini_Windows_x86_64.zip` 等。
+
+**方式 B：从源码构建**
 
 ```shell
 cd apps/gemini
-bash build.sh
+bash build.sh   # 产物在 dist/gemini
 ```
 
 ### 2. 编辑配置
@@ -39,7 +54,7 @@ vim config.yaml
 ### 3. 运行
 
 ```shell
-./dist/gemini -config config.yaml
+./gemini -config config.yaml
 ```
 
 ### 4. 连接音箱
@@ -56,16 +71,6 @@ vim config.yaml
     → Gemini 返回 PCM (24kHz)
     → apps/gemini 发送 play 流 → client aplay 播放
 ```
-
-## 与 legacy/gemini (Python) 对比
-
-| 维度 | legacy/gemini (Python + Rust) | apps/gemini |
-|------|-------------------------------|-------------|
-| 构建 | uv + maturin + Rust + PyO3 | `go build` |
-| 部署 | Python 环境 + .so | 单二进制 (~13MB) |
-| 依赖 | google-genai + numpy | google.golang.org/genai |
-| 打断 | 不支持 | 不支持（半双工） |
-| FFI | PyO3 桥接 | 无 |
 
 ## 配置说明
 
