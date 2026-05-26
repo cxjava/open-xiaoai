@@ -415,9 +415,7 @@ func (m *Module) handlePlay(keyword string) bool {
 	//
 	// 3) SetQueue → PlayURL：切到本地 URL
 
-	if m.config.Commands.AbortXiaoAIOnPlay != nil && *m.config.Commands.AbortXiaoAIOnPlay {
-		_ = m.player.AbortXiaoAI()
-	}
+	m.maybeAbortXiaoAI()
 
 	feedback := fmt.Sprintf("好的，找到%d首歌曲", len(items))
 	if intent.Episode > 0 {
@@ -450,9 +448,7 @@ func (m *Module) handleLXPlay(keyword string) bool {
 		return false
 	}
 
-	if m.config.Commands.AbortXiaoAIOnPlay != nil && *m.config.Commands.AbortXiaoAIOnPlay {
-		_ = m.player.AbortXiaoAI()
-	}
+	m.maybeAbortXiaoAI()
 	name := track.Name
 	if name == "" {
 		name = keyword
@@ -570,6 +566,9 @@ func sanitizeMusicFilename(name string) string {
 }
 
 func (m *Module) handleNext() bool {
+	// 云端也会识别"下一首"并对它自己的 PlayList 做 next，会和我们抢
+	// mediaplayer。先 abort 再切歌。
+	m.maybeAbortXiaoAI()
 	if m.player.Next() {
 		return true
 	}
@@ -579,6 +578,7 @@ func (m *Module) handleNext() bool {
 }
 
 func (m *Module) handlePrevious() bool {
+	m.maybeAbortXiaoAI()
 	if m.player.Previous() {
 		return true
 	}
@@ -592,6 +592,23 @@ func (m *Module) handlePlaybackMode(mode PlaybackMode, message string) bool {
 	m.player.SetMode(mode)
 	m.player.Speak(message)
 	return true
+}
+
+// maybeAbortXiaoAI 在用户触发的播放变更前同步重启 mico_aivs_lab，
+// 杀掉小爱云端 NLP / TTS 流水线。
+//
+// 必要性：小爱云端 ASR 会同步识别同一句用户语音，~1-2s 后云端 NLP 返回
+// 自己那套"试听版 URL / 云端随机播放清单"，下发给 mediaplayer。
+// 我们如果只是 player_play_url 一首本地歌，云端的 PlayList 还活着，
+// 等我们这首播完，mediaplayer 切到云端 PlayList 的下一项，用户看到的就是
+// "随机播放后被系统的随机插入"。
+//
+// 通过 abort 把云端流水线整个 kill 掉，可断掉这条 race。
+// 由 commands.abort_xiaoai_on_play 配置开关，默认 true。
+func (m *Module) maybeAbortXiaoAI() {
+	if m.config.Commands.AbortXiaoAIOnPlay != nil && *m.config.Commands.AbortXiaoAIOnPlay {
+		_ = m.player.AbortXiaoAI()
+	}
 }
 
 // matchStory 检查系列名是否匹配任一故事配置
@@ -624,6 +641,11 @@ func (m *Module) handleRandomPlay(text string) bool {
 	}
 	items := m.player.BuildQueueFromSongs(songs)
 	log.Printf("🎵 [music] 随机播放: %d 首", len(items))
+
+	// 在 Speak 之前打断云端：云端识别"随便听听"后会推自己那套随机清单
+	// 给 mediaplayer，导致本地播完一首后被云端 PlayList 的下一项抢占。
+	m.maybeAbortXiaoAI()
+
 	m.player.StopTTS()
 	m.player.Speak(fmt.Sprintf("好的，随机播放%d首歌曲", len(items)))
 	m.player.SetQueue(items)
