@@ -141,6 +141,74 @@ func (i *Indexer) Save() error {
 	return nil
 }
 
+// AddSong 增量加入一首歌的索引：读元数据并追加到 songs 列表。
+// 用在 LX 下载完成等"明确知道新增了哪个文件"的场景，避免触发整库 Refresh。
+// 同 path 已存在则只更新（同样需要 size/mtime 不一致才会重新提取元数据）。
+func (i *Indexer) AddSong(path string) error {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("abs: %w", err)
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		return fmt.Errorf("AddSong: %s is a directory", abs)
+	}
+
+	i.mu.RLock()
+	var existing *IndexedSong
+	for idx := range i.songs {
+		if i.songs[idx].Path == abs {
+			s := i.songs[idx]
+			existing = &s
+			break
+		}
+	}
+	i.mu.RUnlock()
+
+	if existing != nil && existing.Size == info.Size() && existing.MtimeNs == info.ModTime().UnixNano() {
+		return nil
+	}
+
+	song, err := extractMetadata(abs)
+	if err != nil {
+		log.Printf("⚠️ [music/idx] AddSong 提取元数据失败 (将退化为文件名匹配): %v", err)
+		song = IndexedSong{
+			Path:    abs,
+			Size:    info.Size(),
+			MtimeNs: info.ModTime().UnixNano(),
+		}
+		base := filepath.Base(abs)
+		ext := filepath.Ext(base)
+		song.NameLower = strings.ToLower(strings.TrimSuffix(base, ext))
+	}
+
+	i.mu.Lock()
+	replaced := false
+	for idx := range i.songs {
+		if i.songs[idx].Path == abs {
+			i.songs[idx] = song
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		i.songs = append(i.songs, song)
+	}
+	i.pathSet[abs] = struct{}{}
+	total := len(i.songs)
+	i.mu.Unlock()
+
+	if replaced {
+		log.Printf("📂 [music/idx] AddSong 更新: %s (total=%d)", abs, total)
+	} else {
+		log.Printf("📂 [music/idx] AddSong 新增: %s (total=%d)", abs, total)
+	}
+	return nil
+}
+
 // Refresh 刷新索引：扫描目录，提取元数据
 func (i *Indexer) Refresh() error {
 	scanStart := time.Now()

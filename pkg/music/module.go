@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -487,9 +488,10 @@ func (m *Module) downloadLXTrack(ctx context.Context, track *LXTrack, fallbackNa
 	if name == "" {
 		name = fallbackName
 	}
-	filename := sanitizeMusicFilename(fmt.Sprintf("%s - %s.mp3", name, track.Singer))
+	ext := lxFileExtension(track)
+	filename := sanitizeMusicFilename(fmt.Sprintf("%s - %s%s", name, track.Singer, ext))
 	if track.Singer == "" {
-		filename = sanitizeMusicFilename(name + ".mp3")
+		filename = sanitizeMusicFilename(name + ext)
 	}
 	targetPath := filepath.Join(dir, filename)
 	if _, err := os.Stat(targetPath); err == nil {
@@ -500,8 +502,9 @@ func (m *Module) downloadLXTrack(ctx context.Context, track *LXTrack, fallbackNa
 			return SongItem{}, false
 		}
 	}
-	if err := m.indexer.Refresh(); err != nil {
-		log.Printf("⚠️ [music/lx] 下载后刷新曲库失败: %v", err)
+	// 单点增量入库，避免对大库做整库 Refresh
+	if err := m.indexer.AddSong(targetPath); err != nil {
+		log.Printf("⚠️ [music/lx] 下载后 AddSong 失败: %v", err)
 	}
 	m.fileSrv.AllowFile(targetPath)
 	url := m.fileSrv.CreateFileURL(targetPath)
@@ -514,6 +517,48 @@ func (m *Module) downloadLXTrack(ctx context.Context, track *LXTrack, fallbackNa
 }
 
 var unsafeFilenameChars = regexp.MustCompile(`[\\/:*?"<>|]+`)
+
+// lxKnownExtensions LX 直链可能的音频扩展（小写）。
+// 用 map 而不是 audioContentTypes：那个是 HTTP MIME 表，不一定全集。
+var lxKnownExtensions = map[string]struct{}{
+	".mp3": {}, ".flac": {}, ".wav": {}, ".m4a": {}, ".aac": {}, ".ogg": {}, ".ape": {},
+}
+
+// lxFileExtension 从 LX 返回的 quality / URL 推断真实文件扩展名。
+// 之前固定 .mp3 会让 flac 直链落地后扩展名错配：本地 mime 错、indexer 默认 extensions
+// 不含 .flac 时还会被过滤掉。
+func lxFileExtension(track *LXTrack) string {
+	if track != nil {
+		q := strings.ToLower(strings.TrimSpace(track.Quality))
+		switch q {
+		case "flac", "flac24", "hires":
+			return ".flac"
+		case "ape":
+			return ".ape"
+		case "wav":
+			return ".wav"
+		case "m4a", "aac":
+			return ".m4a"
+		case "ogg":
+			return ".ogg"
+		}
+		// quality 形如 "128k" / "320k" 当作 mp3
+		if strings.HasSuffix(q, "k") {
+			return ".mp3"
+		}
+		// 退一步：从 URL path 末尾扒（去掉 query）
+		if track.URL != "" {
+			if u, err := url.Parse(track.URL); err == nil {
+				if e := strings.ToLower(filepath.Ext(u.Path)); e != "" {
+					if _, ok := lxKnownExtensions[e]; ok {
+						return e
+					}
+				}
+			}
+		}
+	}
+	return ".mp3"
+}
 
 func sanitizeMusicFilename(name string) string {
 	name = unsafeFilenameChars.ReplaceAllString(name, "_")

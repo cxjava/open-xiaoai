@@ -195,6 +195,31 @@ func TestLXClientResolveLogsRemoteURLWithoutPassword(t *testing.T) {
 	}
 }
 
+func TestLXFileExtensionInfersFromQualityAndURL(t *testing.T) {
+	cases := []struct {
+		name  string
+		track LXTrack
+		want  string
+	}{
+		{"flac quality", LXTrack{Quality: "flac", URL: "https://x/a"}, ".flac"},
+		{"hires quality", LXTrack{Quality: "hires", URL: "https://x/a"}, ".flac"},
+		{"bitrate quality", LXTrack{Quality: "320k", URL: "https://x/a"}, ".mp3"},
+		{"m4a quality", LXTrack{Quality: "m4a", URL: "https://x/a"}, ".m4a"},
+		{"empty quality, flac url", LXTrack{URL: "https://x/song.flac?token=1"}, ".flac"},
+		{"empty quality, mp3 url", LXTrack{URL: "https://x/song.mp3"}, ".mp3"},
+		{"unknown quality, no url ext", LXTrack{URL: "https://x/track"}, ".mp3"},
+		{"completely empty", LXTrack{}, ".mp3"},
+	}
+	for _, c := range cases {
+		c := c
+		t.Run(c.name, func(t *testing.T) {
+			if got := lxFileExtension(&c.track); got != c.want {
+				t.Errorf("lxFileExtension(%+v) = %q, want %q", c.track, got, c.want)
+			}
+		})
+	}
+}
+
 func TestLXClientDownloadWritesProxyResponseToFile(t *testing.T) {
 	var sawDownload bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
