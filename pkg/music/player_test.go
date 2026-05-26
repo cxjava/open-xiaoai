@@ -61,6 +61,27 @@ func TestPlayerRepeatOneReplaysCurrentOnIdle(t *testing.T) {
 	}
 }
 
+func TestPlayerRepeatOneManualNextStillAdvances(t *testing.T) {
+	// 单曲循环只影响自动 Idle，用户手动 "下一首" 仍然要跳出当前曲，
+	// 跟 iTunes / Spotify / Apple Music 一致。
+	p, played := newTestPlayer(t)
+	p.SetQueue(testItems())
+	p.SetMode(PlaybackModeRepeatOne)
+
+	if !p.Next() {
+		t.Fatal("expected Next to advance under RepeatOne")
+	}
+	if got := (*played)[1]; got != "http://music/b.mp3" {
+		t.Fatalf("expected manual Next to advance to b.mp3, got %s", got)
+	}
+	if !p.Previous() {
+		t.Fatal("expected Previous to roll back under RepeatOne")
+	}
+	if got := (*played)[2]; got != "http://music/a.mp3" {
+		t.Fatalf("expected manual Previous to roll back to a.mp3, got %s", got)
+	}
+}
+
 func TestPlayerRepeatAllLoopsPlaylistOnIdle(t *testing.T) {
 	p, played := newTestPlayer(t)
 	p.SetQueue(testItems()[:2])

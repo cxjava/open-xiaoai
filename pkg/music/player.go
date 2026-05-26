@@ -481,6 +481,11 @@ func (p *Player) OnPlayingStatus(status string) {
 	}
 }
 
+// Next 用户主动"下一首"。
+//
+// 跟 OnPlayingStatus 的自动切歌不同：在 RepeatOne 模式下，用户手动 Next 也会
+// 跳到下一首（跟主流播放器一致——单曲循环只影响自动行为，用户操作永远走下一项）。
+// 自动 Idle 的重播逻辑放在 OnPlayingStatus 里。
 func (p *Player) Next() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -513,6 +518,7 @@ func (p *Player) nextLocked(recordHistory bool) bool {
 	}
 }
 
+// Previous 用户主动"上一首"。同 Next，RepeatOne 也跳出当前曲。
 func (p *Player) Previous() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
