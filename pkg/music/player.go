@@ -194,8 +194,13 @@ func (p *Player) PlayURL(url string) error {
 	r := decodeShellResult(resp)
 	// stdout 一般是最后 player_play_url 的输出 {"code": 0}；其他几步 >/dev/null 抑制了。
 	log.Printf("🌐 [music/player] PlayURL ubus 返回: %s", briefShellResult(r))
+	// 设备端非零退出意味着 mediaplayer 没真正接管播放。必须上抛错误，否则
+	// playItemLocked 会把 state 标成 Playing 但实际没声音，PlayingMonitor 永远不会
+	// 上报 Playing→Idle 跃迁，整个队列就此卡死。
 	if r != nil && r.ExitCode != 0 {
-		log.Printf("⚠️ [music/player] PlayURL 设备端非零退出，可能未播放本地 URL")
+		stderr := strings.TrimSpace(r.Stderr)
+		log.Printf("❌ [music/player] PlayURL 设备端非零退出 exit=%d stderr=%q", r.ExitCode, stderr)
+		return fmt.Errorf("player_play_url exit=%d stderr=%s", r.ExitCode, stderr)
 	}
 	return nil
 }
