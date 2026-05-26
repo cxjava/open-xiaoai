@@ -1,39 +1,33 @@
 #!/bin/sh
-
-set -e
+# 启动 open-xiaoai client。
+# 参数优先级：命令行 > $WORK_DIR/server.txt > ws://127.0.0.1:4399
+set -eu
 
 WORK_DIR="${OPEN_XIAOAI_DIR:-/data/open-xiaoai}"
-CLIENT_BIN="$WORK_DIR/client"
-SERVER_FILE="$WORK_DIR/server.txt"
-DEFAULT_SERVER="ws://127.0.0.1:4399"
+CLIENT="$WORK_DIR/client"
 
-if [ ! -x "$CLIENT_BIN" ]; then
-    echo "❌ 找不到可执行文件: $CLIENT_BIN"
-    echo "请先下载 client 到 $CLIENT_BIN 并执行 chmod +x $CLIENT_BIN"
+[ -x "$CLIENT" ] || {
+    echo "❌ 找不到可执行文件: $CLIENT" >&2
+    echo "   请先下载 client 并 chmod +x" >&2
     exit 1
+}
+
+# 无 CLI 参数时从 server.txt 读；都没有则用 localhost 兜底
+if [ $# -eq 0 ] && [ -s "$WORK_DIR/server.txt" ]; then
+    # server.txt 可写一行或多行参数，例如：
+    #   ws://192.168.1.100:4399 ws://my-server:4399
+    #   -switch ws://IP:4399 ws://IP:4400
+    # shellcheck disable=SC2046
+    set -- $(cat "$WORK_DIR/server.txt")
 fi
+[ $# -eq 0 ] && set -- ws://127.0.0.1:4399
 
-if [ "$#" -eq 0 ]; then
-    if [ -f "$SERVER_FILE" ]; then
-        # server.txt 可写入单地址、多地址或 -switch 参数，例如：
-        # ws://192.168.1.100:4399 ws://my-server:4399
-        # -switch ws://192.168.1.100:4399 ws://192.168.1.100:4400
-        SERVER_ARGS=$(cat "$SERVER_FILE")
-        if [ -n "$SERVER_ARGS" ]; then
-            # shellcheck disable=SC2086
-            set -- $SERVER_ARGS
-        else
-            set -- "$DEFAULT_SERVER"
-        fi
-    else
-        set -- "$DEFAULT_SERVER"
-    fi
-fi
+# 杀旧实例：pkill 优先（BusyBox 不一定带 → 退化到 ps/awk，
+# 用 $0 ~ c 自动避开 awk 自己）。$() 这里就是想要 word-split 多个 PID。
+# shellcheck disable=SC2046
+pkill -f "$CLIENT" 2>/dev/null \
+    || kill $(ps | awk -v c="$CLIENT" '$0 ~ c && !/awk/ {print $1}') 2>/dev/null \
+    || true
 
-echo "🔥 正在启动 Client..."
-echo "   工作目录: $WORK_DIR"
-echo "   启动参数: $*"
-
-kill -9 $(ps | grep "open-xiaoai/client" | grep -v grep | awk '{print $1}') >/dev/null 2>&1 || true
-
-exec "$CLIENT_BIN" "$@"
+echo "🔥 启动 client: $*"
+exec "$CLIENT" "$@"
