@@ -2,6 +2,29 @@ package music
 
 import "testing"
 
+func TestNormalizeTrimsChinesePunctuation(t *testing.T) {
+	cases := map[string]string{
+		"，停止播放":   "停止播放",
+		"播放：晴天":   "播放：晴天",
+		"播放！":     "播放",
+		"  播放,晴天": "播放,晴天",
+		"播放？":     "播放",
+		"。停止。":    "停止",
+		"\t停止\n":  "停止",
+	}
+	for in, want := range cases {
+		if got := Normalize(in); got != want {
+			t.Errorf("Normalize(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestNormalizedForMatchStripsSpaces(t *testing.T) {
+	if got := NormalizedForMatch("  下 一首 "); got != "下一首" {
+		t.Errorf("NormalizedForMatch unexpected: %q", got)
+	}
+}
+
 func TestParsePlayIntentStripsSongResourcePrefix(t *testing.T) {
 	intent := ParsePlayIntent("歌曲周杰伦晴天")
 

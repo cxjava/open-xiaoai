@@ -8,31 +8,15 @@ import (
 	"strings"
 )
 
-// 标点符号（用于去除首尾）
-var trimPunctuation = []rune{'：', ':', '，', ',', '。', '！', '？', '!', '?'}
+// trimPunctuationCutset 首尾要去除的标点集合。
+// 注意：strings.Trim 是按 rune 比对的，所以中英文（多字节）标点都能命中。
+// 之前的实现用 `rune(s[0]) == p`，对中文标点（UTF-8 3 字节）永远不匹配，导致
+// `Normalize("，停止")` 仍然返回 "，停止"，命令命中率受影响。
+const trimPunctuationCutset = "：:，,。！？!? \t\r\n"
 
-// Normalize 文本规范化：TrimSpace + 去除首尾标点
+// Normalize 文本规范化：去除首尾空白与中英文标点。
 func Normalize(s string) string {
-	s = strings.TrimSpace(s)
-	for len(s) > 0 {
-		found := false
-		for _, p := range trimPunctuation {
-			if rune(s[0]) == p {
-				s = strings.TrimLeft(s, string(p))
-				found = true
-				break
-			}
-			if len(s) > 0 && rune(s[len(s)-1]) == p {
-				s = strings.TrimRight(s, string(p))
-				found = true
-				break
-			}
-		}
-		if !found {
-			break
-		}
-	}
-	return strings.TrimSpace(s)
+	return strings.Trim(s, trimPunctuationCutset)
 }
 
 // NormalizedForMatch 用于匹配的规范化：去除空格
