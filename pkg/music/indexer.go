@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,6 +17,20 @@ import (
 	"github.com/dhowden/tag"
 	"golang.org/x/sync/errgroup"
 )
+
+// metadataConcurrency 限制并发提取元数据的 goroutine 数。
+// 之前 `g.Go` 不设上限，10k+ 文件会同时打开同样数量的文件描述符，
+// 在 macOS 默认 `ulimit -n 256` 上直接报 too many open files。
+var metadataConcurrency = func() int {
+	n := runtime.NumCPU() * 2
+	if n < 4 {
+		n = 4
+	}
+	if n > 32 {
+		n = 32
+	}
+	return n
+}()
 
 // IndexedSong 索引后的歌曲元数据
 type IndexedSong struct {
@@ -204,6 +219,7 @@ func (i *Indexer) Refresh() error {
 	var failCount int
 	var failCountMu sync.Mutex
 	g, _ := errgroup.WithContext(context.Background())
+	g.SetLimit(metadataConcurrency)
 
 	for _, path := range needRefresh {
 		path := path
