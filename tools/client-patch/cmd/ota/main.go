@@ -83,6 +83,7 @@ func main() {
 	}
 
 	fmt.Println("🔥 [OTA] 正在获取 OTA 信息...")
+	fmt.Println("🔥 [OTA] OTA URL: ", otaResult.URL)
 	firmware, err := ota.FetchFirmwareInfo(otaResult.URL, nil)
 	if err != nil {
 		fmt.Printf("❌ %v\n", err)

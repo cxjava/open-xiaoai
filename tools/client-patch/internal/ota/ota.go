@@ -135,7 +135,7 @@ func FetchFirmwareInfo(otaURL string, client *http.Client) (*FirmwareInfo, error
 	if err != nil {
 		return nil, err
 	}
-
+	logger.Info("OTA API 响应: %s", string(body))
 	var result OTAAPIResponse
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, err

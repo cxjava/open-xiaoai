@@ -170,11 +170,7 @@ music:
 
 ### 2. 在音箱上运行 client
 
-`apps/client` 负责连接你的 Server。下载和运行方式见：
-
-```text
-apps/client/README.md
-```
+`apps/client` 负责连接你的 Server。下载和运行方式见：[`apps/client/README.md`](apps/client/README.md)
 
 常见运行方式：
 

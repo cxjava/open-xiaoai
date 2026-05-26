@@ -84,7 +84,9 @@ go build -o ota ./cmd/ota
 ```bash
 cd tools/client-patch
 ./build.sh
-# 产物在 assets/ 目录
+# 产物在 assets/ 目录 
+assets/xxx/root-patched.squashfs
+assets/xxx/root.squashfs
 ```
 
 `build.sh` 会自动构建 `ota` 二进制，依次执行 `cmd/ota`、`src/extract.sh`、`src/patch.sh`、`src/squashfs.sh`。
