@@ -69,6 +69,7 @@ Open-XiaoAI 通过运行在音箱上的 client 补丁程序，把小爱音箱的
 - 支持按关键词触发 AI，避免小爱每句话都交给模型。
 - 支持关键词或唤醒词打断正在播放的 AI 回复。
 - 支持自定义固定回复，包括文字回复和音频 URL。
+- 提供 `/admin` Web 管理页，可在线编辑 chat YAML 配置并测试 TTS 播放。
 - 集成 `pkg/music`，可以同时做 AI 助手和音乐播放器。
 
 文档：[`apps/chat/README.md`](apps/chat/README.md)
@@ -202,6 +203,8 @@ vim config.yaml
 ```
 
 默认监听 `ws://0.0.0.0:4399`。如果要和 `apps/gemini` 同时运行，可以把 `apps/chat` 改到 `4400` 端口。
+
+启动后可访问 `http://你的IP:4399/admin` 打开 Web 管理页。管理页会读取并覆盖当前 `-config` 指定的 YAML 文件；如需暴露到局域网之外，请先在 `auth.users` 配置 Basic Auth。
 
 文档：[`apps/chat/README.md`](apps/chat/README.md)
 

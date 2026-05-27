@@ -37,17 +37,21 @@ func shellEscapeSingle(s string) string {
 }
 
 func (s *Speaker) PlayTTS(text string, blocking bool) error {
-	script := fmt.Sprintf("/usr/sbin/tts_play.sh '%s'", shellEscapeSingle(text))
 	if blocking {
-		_, err := s.runShell(script, 10*60*1000)
-		return err
+		return s.PlayTTSWithTimeout(text, 10*60*1000)
 	}
 	go func() {
-		if _, err := s.runShell(script, 15000); err != nil {
+		if err := s.PlayTTSWithTimeout(text, 15000); err != nil {
 			log.Printf("⚠️ TTS 播放失败: %v", err)
 		}
 	}()
 	return nil
+}
+
+func (s *Speaker) PlayTTSWithTimeout(text string, timeoutMs uint64) error {
+	script := fmt.Sprintf("/usr/sbin/tts_play.sh '%s'", shellEscapeSingle(text))
+	_, err := s.runShell(script, timeoutMs)
+	return err
 }
 
 func (s *Speaker) PlayURL(url string, blocking bool) error {

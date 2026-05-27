@@ -16,7 +16,6 @@ import (
 	"github.com/cxjava/open-xiaoai/apps/client/base"
 	"github.com/cxjava/open-xiaoai/apps/client/services/connect"
 	"github.com/cxjava/open-xiaoai/apps/client/utils"
-	"github.com/cxjava/open-xiaoai/pkg/music"
 )
 
 func parseBasicAuth(r *http.Request) (username, password string, ok bool) {
@@ -35,11 +34,8 @@ func parseBasicAuth(r *http.Request) (username, password string, ok bool) {
 	return pair[0], pair[1], true
 }
 
-// OnConnectionHost 连接建立时回调，传入客户端使用的 host（来自 r.Host），用于设置音乐 base_url 等
-type OnConnectionHost func(host string)
-
-func startServer(ctx context.Context, engine *Engine, onConnectionHost OnConnectionHost, musicModule *music.Module) error {
-	cfg := engine.config
+func startServer(ctx context.Context, app *appRuntime) error {
+	cfg := app.Config()
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -48,17 +44,14 @@ func startServer(ctx context.Context, engine *Engine, onConnectionHost OnConnect
 	log.Printf("✅ 已启动: %s", addr)
 
 	mux := http.NewServeMux()
+	admin := newAdminServer(app)
+	mux.HandleFunc("/admin", withAppAuth(app, admin.handlePage))
+	mux.HandleFunc("/admin/", withAppAuth(app, admin.handlePage))
+	mux.HandleFunc("/admin/api/config", withAppAuth(app, admin.handleConfig))
+	mux.HandleFunc("/admin/api/tts", withAppAuth(app, admin.handleTTS))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if cfg.Auth.RequiresAuth() {
-			user, pass, ok := parseBasicAuth(r)
-			if !ok {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
-				return
-			}
-			if !cfg.Auth.ValidateAuth(user, pass) {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
-				return
-			}
+		if !authorizeAppRequest(app, w, r) {
+			return
 		}
 
 		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
@@ -68,7 +61,7 @@ func startServer(ctx context.Context, engine *Engine, onConnectionHost OnConnect
 			log.Printf("❌ WebSocket accept: %v", err)
 			return
 		}
-		handleConnection(conn, r, engine, onConnectionHost, musicModule)
+		handleConnection(conn, r, app)
 	})
 
 	server := &http.Server{Handler: mux}
@@ -80,9 +73,32 @@ func startServer(ctx context.Context, engine *Engine, onConnectionHost OnConnect
 	return server.Serve(listener)
 }
 
-func handleConnection(conn *websocket.Conn, r *http.Request, engine *Engine, onConnectionHost OnConnectionHost, musicModule *music.Module) {
+func withAppAuth(app *appRuntime, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !authorizeAppRequest(app, w, r) {
+			return
+		}
+		next(w, r)
+	}
+}
+
+func authorizeAppRequest(app *appRuntime, w http.ResponseWriter, r *http.Request) bool {
+	cfg := app.Config()
+	if !cfg.Auth.RequiresAuth() {
+		return true
+	}
+	user, pass, ok := parseBasicAuth(r)
+	if !ok || !cfg.Auth.ValidateAuth(user, pass) {
+		w.Header().Set("WWW-Authenticate", `Basic realm="open-xiaoai"`)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return false
+	}
+	return true
+}
+
+func handleConnection(conn *websocket.Conn, r *http.Request, app *appRuntime) {
 	log.Printf("✅ 已连接: %s", r.RemoteAddr)
-	initConnection(conn, r, engine, onConnectionHost, musicModule)
+	initConnection(conn, r, app)
 
 	if err := connect.GetMessageManager().ProcessMessages(); err != nil {
 		log.Printf("❌ 消息处理异常: %v", err)
@@ -92,17 +108,17 @@ func handleConnection(conn *websocket.Conn, r *http.Request, engine *Engine, onC
 	log.Printf("❌ 已断开连接: %s", r.RemoteAddr)
 }
 
-func initConnection(conn *websocket.Conn, r *http.Request, engine *Engine, onConnectionHost OnConnectionHost, musicModule *music.Module) {
+func initConnection(conn *websocket.Conn, r *http.Request, app *appRuntime) {
 	connect.GetMessageManager().Init(conn)
 
 	// 连接感知 base_url：客户端用哪个 host 连上来，就用同一 host 拼音乐 URL（支持 LAN/Tailscale）
-	if onConnectionHost != nil && r.Host != "" {
+	if r.Host != "" {
 		host, _, err := net.SplitHostPort(r.Host)
 		if err != nil {
 			host = r.Host
 		}
 		if host != "" {
-			onConnectionHost(host)
+			app.OnConnectionHost(host)
 		}
 	}
 
@@ -121,10 +137,10 @@ func initConnection(conn *websocket.Conn, r *http.Request, engine *Engine, onCon
 		//
 		// 历史 bug：之前这里有 `if musicModule.OnEvent(event) { return }` 截胡，导致 "闭嘴" 停了音乐但
 		// AI 还在源源不断输出。现已改为两者都分发。
-		if musicModule != nil {
+		if musicModule := app.MusicModule(); musicModule != nil {
 			musicModule.OnEvent(event)
 		}
-		engine.OnEvent(event)
+		app.engine.OnEvent(event)
 		return nil
 	})
 	connect.GetHandlers().SetStreamHandler(func(stream connect.Stream) error {
@@ -144,13 +160,13 @@ func initConnection(conn *websocket.Conn, r *http.Request, engine *Engine, onCon
 	// 配置 greeting: "" 可以彻底关掉欢迎语（不再回退到 "已连接"）。
 	go func() {
 		time.Sleep(2 * time.Second)
-		greeting := engine.config.Greeting
+		greeting := app.Config().Greeting
 		if greeting == "" {
 			log.Printf("🔕 跳过欢迎语：greeting 为空")
 			return
 		}
 		log.Printf("👋 播放欢迎语: %q", greeting)
-		if err := engine.speaker.PlayTTS(greeting, false); err != nil {
+		if err := app.speaker.PlayTTS(greeting, false); err != nil {
 			log.Printf("⚠️ 欢迎语播放失败: %v", err)
 		}
 	}()

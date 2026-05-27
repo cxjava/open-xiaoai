@@ -20,9 +20,10 @@ import (
 
 // Engine handles user messages: keyword matching → OpenAI streaming → sentence-by-sentence TTS.
 type Engine struct {
-	config  *AppConfig
-	speaker *Speaker
-	client  *openai.Client
+	configMu sync.RWMutex
+	config   *AppConfig
+	speaker  *Speaker
+	client   *openai.Client
 
 	mu         sync.Mutex
 	cancelFunc context.CancelFunc
@@ -56,6 +57,18 @@ func NewEngine(cfg *AppConfig, speaker *Speaker) *Engine {
 		speaker: speaker,
 		client:  openai.NewClientWithConfig(clientCfg),
 	}
+}
+
+func (e *Engine) Config() *AppConfig {
+	e.configMu.RLock()
+	defer e.configMu.RUnlock()
+	return e.config
+}
+
+func (e *Engine) UpdateConfig(cfg *AppConfig) {
+	e.configMu.Lock()
+	defer e.configMu.Unlock()
+	e.config = cfg
 }
 
 // --- Event parsing (from xiaoai.ts onEvent) ---
@@ -97,7 +110,7 @@ func (e *Engine) OnEvent(event connect.Event) {
 		e.handleInstruction(data)
 	case "kws":
 		log.Printf("🔥 唤醒词识别: %s", dataStr)
-		if e.config.Interrupt.KwsInterrupt {
+		if e.Config().Interrupt.KwsInterrupt {
 			e.InterruptOnly()
 		}
 	}
@@ -123,7 +136,8 @@ func (e *Engine) handleInstruction(data []byte) {
 
 	text := msg.Payload.Results[0].Text
 	log.Printf("🗣️ 用户: %s", text)
-	decision, keyword := e.config.instructionDecision(text)
+	cfg := e.Config()
+	decision, keyword := cfg.instructionDecision(text)
 	switch decision {
 	case instructionDecisionCallAI:
 		log.Printf("✅ 语音进入 AI: call_ai keyword=%q", keyword)
@@ -132,7 +146,7 @@ func (e *Engine) handleInstruction(data []byte) {
 		log.Printf("⏹️ 只打断不调用 AI: interrupt keyword=%q", keyword)
 		e.InterruptOnly()
 	default:
-		log.Printf("⏭️ 不处理语音: 未匹配 call_ai_keywords=%v 或 interrupt.keywords=%v match=%s text=%q", e.config.CallAIKeywords, e.config.Interrupt.Keywords, e.config.Interrupt.MatchMode, text)
+		log.Printf("⏭️ 不处理语音: 未匹配 call_ai_keywords=%v 或 interrupt.keywords=%v match=%s text=%q", cfg.CallAIKeywords, cfg.Interrupt.Keywords, cfg.Interrupt.MatchMode, text)
 		return
 	}
 }
@@ -175,7 +189,7 @@ func (e *Engine) OnMessage(text string) {
 			log.Printf("⚠️ stop_tts timeout/failed: %v", err)
 		}
 	}
-	if e.config.shouldStopTTSBeforeHandling(text) {
+	if e.Config().shouldStopTTSBeforeHandling(text) {
 		stopTTS()
 	} else {
 		go stopTTS() // 轻打断：终止 client 端当前 TTS，不阻塞 AI 请求准备
@@ -184,8 +198,9 @@ func (e *Engine) OnMessage(text string) {
 }
 
 func (e *Engine) handleMessage(ctx context.Context, text string) {
+	cfg := e.Config()
 	// 1. Check custom replies
-	for _, r := range e.config.CustomReplies {
+	for _, r := range cfg.CustomReplies {
 		if r.Match == text {
 			if r.URL != "" {
 				log.Printf("🔊 自定义回复 (URL): %s", r.URL)
@@ -199,12 +214,12 @@ func (e *Engine) handleMessage(ctx context.Context, text string) {
 	}
 
 	// 2. Check keyword match
-	callAIKeyword := e.config.callAIKeyword(text)
+	callAIKeyword := cfg.callAIKeyword(text)
 	if callAIKeyword == "" {
-		log.Printf("⏹️ 只打断不调用 AI: 未匹配 call_ai_keywords=%v text=%q", e.config.CallAIKeywords, text)
+		log.Printf("⏹️ 只打断不调用 AI: 未匹配 call_ai_keywords=%v text=%q", cfg.CallAIKeywords, text)
 		return
 	}
-	log.Printf("🤖 准备调用 AI: call_ai keyword=%q model=%s text=%q", callAIKeyword, e.config.GetLLM().Model, text)
+	log.Printf("🤖 准备调用 AI: call_ai keyword=%q model=%s text=%q", callAIKeyword, cfg.GetLLM().Model, text)
 
 	// 3. Stream from OpenAI → sentence-by-sentence TTS
 	e.addHistory("user", text)
@@ -216,7 +231,7 @@ func (e *Engine) handleMessage(ctx context.Context, text string) {
 			return
 		}
 		log.Printf("❌ AI error: %v", err)
-		msg := e.config.ErrorMessage
+		msg := cfg.ErrorMessage
 		if msg == "" {
 			msg = "出错了，请稍后再试吧！"
 		}
@@ -230,7 +245,7 @@ func (e *Engine) handleMessage(ctx context.Context, text string) {
 }
 
 func (e *Engine) matchesKeyword(text string) bool {
-	return e.config.shouldCallAI(text)
+	return e.Config().shouldCallAI(text)
 }
 
 // --- OpenAI streaming + sentence-by-sentence TTS ---
@@ -239,8 +254,9 @@ func (e *Engine) streamAndPlay(ctx context.Context, userText string) (string, er
 	messages := e.buildMessages(userText)
 	log.Printf("🤖 调用 AI 中: messages=%d", len(messages))
 
+	cfg := e.Config()
 	stream, err := e.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
-		Model:    e.config.GetLLM().Model,
+		Model:    cfg.GetLLM().Model,
 		Messages: messages,
 		Stream:   true,
 	})
@@ -330,7 +346,7 @@ func (e *Engine) playReplyPrefixOnce(ctx context.Context, played *bool) error {
 		return nil
 	}
 	*played = true
-	prefix := strings.TrimSpace(e.config.ReplyPrefix)
+	prefix := strings.TrimSpace(e.Config().ReplyPrefix)
 	if prefix == "" {
 		return nil
 	}
@@ -383,14 +399,15 @@ func (e *Engine) buildMessages(userText string) []openai.ChatCompletionMessage {
 	e.historyMu.Unlock()
 
 	cap := historyLen
-	if e.config.Prompt.System != "" {
+	cfg := e.Config()
+	if cfg.Prompt.System != "" {
 		cap++
 	}
 	msgs := make([]openai.ChatCompletionMessage, 0, cap)
-	if e.config.Prompt.System != "" {
+	if cfg.Prompt.System != "" {
 		msgs = append(msgs, openai.ChatCompletionMessage{
 			Role:    openai.ChatMessageRoleSystem,
-			Content: e.config.Prompt.System,
+			Content: cfg.Prompt.System,
 		})
 	}
 	e.historyMu.Lock()
@@ -409,7 +426,7 @@ func (e *Engine) addHistory(role, content string) {
 		Content: content,
 	})
 
-	maxLen := e.config.Context.HistoryMaxLength
+	maxLen := e.Config().Context.HistoryMaxLength
 	if maxLen > 0 && len(e.history) > maxLen {
 		e.history = e.history[len(e.history)-maxLen:]
 	}

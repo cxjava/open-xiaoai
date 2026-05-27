@@ -5,7 +5,7 @@
 | 目录 | 角色 | 部署位置 |
 |------|------|----------|
 | [client/](client/README.md) | 跑在小爱音箱上的客户端，连接 Server、转发音频、上报事件 | 小爱音箱（ARMv7） |
-| [chat/](chat/README.md)     | 接入 OpenAI 兼容 API 的 Chat AI Server（文本流式 + TTS） | 服务器 / 本机 |
+| [chat/](chat/README.md)     | 接入 OpenAI 兼容 API 的 Chat AI Server（文本流式 + TTS，含 `/admin` Web 管理页） | 服务器 / 本机 |
 | [gemini/](gemini/README.md) | 接入 Gemini Live API 的实时语音 Server（半双工 PCM 直连） | 服务器 / 本机 |
 
 ## 构建

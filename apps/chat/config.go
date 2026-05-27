@@ -118,6 +118,10 @@ func loadConfig(path string) (*AppConfig, error) {
 		return nil, fmt.Errorf("read config: %w", err)
 	}
 
+	return loadConfigFromBytes(data)
+}
+
+func loadConfigFromBytes(data []byte) (*AppConfig, error) {
 	cfg := defaultConfig()
 
 	if err := yaml.Unmarshal(data, cfg); err != nil {
