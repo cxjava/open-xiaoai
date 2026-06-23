@@ -21,7 +21,7 @@ jobs:
           go-version: stable
           # go-version: '1.25.8'
       - name: Check out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0  # 完整 git 历史，供 goreleaser 生成上次 release 到本次的 changelog
       - name: Install UPX
