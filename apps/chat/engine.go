@@ -398,23 +398,65 @@ func (e *Engine) buildMessages(userText string) []openai.ChatCompletionMessage {
 	historyLen := len(e.history)
 	e.historyMu.Unlock()
 
-	cap := historyLen
+	cap := historyLen + 1
 	cfg := e.Config()
+	timeLine := ""
+	if cfg.Prompt.InjectTime {
+		timeLine = currentTimeLine(cfg.Prompt.Timezone, time.Now())
+	}
 	if cfg.Prompt.System != "" {
 		cap++
 	}
 	msgs := make([]openai.ChatCompletionMessage, 0, cap)
-	if cfg.Prompt.System != "" {
+	sys := cfg.Prompt.System
+	if timeLine != "" {
+		if sys != "" {
+			sys += "\n"
+		}
+		sys += timeLine
+	}
+	if strings.Contains(sys, "{{now}}") || strings.Contains(sys, "{{date}}") {
+		now := time.Now().In(loadTZ(cfg.Prompt.Timezone))
+		sys = strings.ReplaceAll(sys, "{{now}}", now.Format("2006年1月2日 15:04"))
+		sys = strings.ReplaceAll(sys, "{{date}}", now.Format("2006年1月2日"))
+	}
+	if sys != "" {
 		msgs = append(msgs, openai.ChatCompletionMessage{
 			Role:    openai.ChatMessageRoleSystem,
-			Content: cfg.Prompt.System,
+			Content: sys,
 		})
 	}
 	e.historyMu.Lock()
 	msgs = append(msgs, e.history...)
 	e.historyMu.Unlock()
 
+	// 同时拼进最后一条 user 消息（仅副本，不写入历史），避免中转丢弃 system。
+	if timeLine != "" {
+		for i := len(msgs) - 1; i >= 0; i-- {
+			if msgs[i].Role == openai.ChatMessageRoleUser {
+				msgs[i].Content = timeLine + "\n" + msgs[i].Content
+				break
+			}
+		}
+	}
+
 	return msgs
+}
+
+func loadTZ(name string) *time.Location {
+	if name == "" {
+		name = "Asia/Shanghai"
+	}
+	if loc, err := time.LoadLocation(name); err == nil {
+		return loc
+	}
+	return time.FixedZone("CST", 8*3600)
+}
+
+func currentTimeLine(tz string, now time.Time) string {
+	n := now.In(loadTZ(tz))
+	wd := [...]string{"日", "一", "二", "三", "四", "五", "六"}[n.Weekday()]
+	return fmt.Sprintf("[当前时间：%d年%d月%d日 星期%s %02d:%02d]", n.Year(), int(n.Month()), n.Day(), wd, n.Hour(), n.Minute())
 }
 
 func (e *Engine) addHistory(role, content string) {

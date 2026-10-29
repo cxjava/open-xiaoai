@@ -32,6 +32,8 @@ llm:
 # 系统提示词
 prompt:
   system: "你是一个智能助手，请根据用户的问题给出回答。"
+  inject_time: true          # 每次请求注入当前时间（不写入历史）
+  timezone: "Asia/Shanghai"  # 时区
 
 # 上下文配置
 context:

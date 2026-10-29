@@ -106,7 +106,9 @@ http://你的IP:4399/admin
 | `llm.base_url` | API 地址，支持 OpenAI / Claude(OpenRouter) / DeepSeek / 通义千问等 |
 | `llm.api_key` | API 密钥 |
 | `llm.model` | 模型名称 |
-| `prompt.system` | 系统提示词 |
+| `prompt.system` | 系统提示词（支持 `{{now}}` / `{{date}}` 占位符） |
+| `prompt.inject_time` | 请求时注入当前时间，默认 true，不写入历史 |
+| `prompt.timezone` | 时间所用时区，默认 Asia/Shanghai |
 | `context.history_max_length` | 对话历史条数（0=关闭） |
 | `interrupt.keywords` | 打断触发的关键词（空则用 call_ai_keywords） |
 | `interrupt.match_mode` | 匹配模式：exact / prefix / contains |
