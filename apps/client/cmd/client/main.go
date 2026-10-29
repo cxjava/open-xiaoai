@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coder/websocket"
@@ -24,6 +25,7 @@ import (
 var (
 	flagSwitch         = flag.Bool("switch", false, "切换模式：多地址用于 gemini-go/chat-go 语音切换，说切换词即切换 Server")
 	flagSwitchKeywords = flag.String("switch-keywords", "小智模式,对话模式", "切换模式下的触发词，逗号分隔")
+	flagCaptureBackend = flag.String("capture-backend", "noop", "音频采集后端：noop（默认）或 usock（接管固件 speech.usock）")
 )
 
 func basicAuthHeader(username, password string) string {
@@ -33,6 +35,7 @@ func basicAuthHeader(username, password string) string {
 }
 
 type AppClient struct {
+	monitorMu          sync.Mutex
 	kwsMonitor         *monitor.KwsMonitor
 	instructionMonitor *monitor.InstructionMonitor
 	playingMonitor     *monitor.PlayingMonitor
@@ -80,8 +83,10 @@ func (c *AppClient) init(conn *websocket.Conn, cfg *runConfig) {
 	rpc.AddCommand("stop_tts", stopTTS)
 	rpc.AddCommand("start_play", startPlay)
 	rpc.AddCommand("stop_play", stopPlay)
-	rpc.AddCommand("start_recording", startRecording)
+	rpc.AddCommand("start_recording", c.startRecording)
 	rpc.AddCommand("stop_recording", stopRecording)
+	rpc.AddCommand("continue_dialog", continueDialog)
+	rpc.AddCommand("finish_dialog", finishDialog)
 
 	c.instructionMonitor.Start(func(event monitor.FileMonitorEvent) {
 		if cfg != nil && cfg.switchMode && event.Type == "NewLine" && event.Line != "" {
@@ -105,18 +110,57 @@ func (c *AppClient) init(conn *websocket.Conn, cfg *runConfig) {
 		mgr.SendEvent("playing", status)
 	})
 
-	c.kwsMonitor.Start(func(event monitor.KwsMonitorEvent) {
-		mgr.SendEvent("kws", event)
-	})
+	startKwsMonitor := func() {
+		c.monitorMu.Lock()
+		defer c.monitorMu.Unlock()
+		c.kwsMonitor.Start(func(event monitor.KwsMonitorEvent) {
+			mgr.SendEvent("kws", event)
+		})
+	}
+	if audio.GetRecorder().DefaultBackend() == "usock" {
+		if err := c.enableUsock(); err != nil {
+			log.Printf("⚠️ speech.usock 接管失败，回滚并继续使用 noop: %v", err)
+			startKwsMonitor()
+		} else {
+			log.Printf("✅ speech.usock 已注册；本次运行不轮询 kws.log")
+		}
+	} else {
+		startKwsMonitor()
+	}
+}
+
+func (c *AppClient) enableUsock() error {
+	mgr := connect.GetMessageManager()
+	if err := audio.GetRecorder().EnableUsock(func(event string, data interface{}) {
+		if sendErr := mgr.SendEvent(event, data); sendErr != nil {
+			log.Printf("⚠️ 发送 speech.usock 事件 %s 失败: %v", event, sendErr)
+		}
+	}, func() {
+		c.monitorMu.Lock()
+		defer c.monitorMu.Unlock()
+		log.Printf("⚠️ speech.usock 异常退出，已恢复原生语音服务；启用 kws.log 兼容轮询")
+		c.kwsMonitor.Start(func(event monitor.KwsMonitorEvent) {
+			mgr.SendEvent("kws", event)
+		})
+	}); err != nil {
+		return err
+	}
+	c.monitorMu.Lock()
+	c.kwsMonitor.Stop()
+	c.monitorMu.Unlock()
+	return nil
 }
 
 func (c *AppClient) dispose() {
 	connect.GetMessageManager().Dispose()
 	audio.GetPlayer().Stop()
 	audio.GetRecorder().StopRecording()
+	audio.GetRecorder().DisableUsock()
+	c.monitorMu.Lock()
 	c.instructionMonitor.Stop()
 	c.playingMonitor.Stop()
 	c.kwsMonitor.Stop()
+	c.monitorMu.Unlock()
 }
 
 // parseInstructionText 从 instruction.log 行中提取用户最终语音文本
@@ -175,11 +219,15 @@ func (c *AppClient) run() {
 	switchMode := *flagSwitch
 	switchKeywords := parseSwitchKeywords(*flagSwitchKeywords)
 
+	if err := audio.GetRecorder().SetDefaultBackend(*flagCaptureBackend); err != nil {
+		log.Fatalf("❌ %v", err)
+	}
 	if switchMode {
 		log.Printf("📡 切换模式：服务器列表 %v，切换词 %v", serverURLs, switchKeywords)
 	} else {
 		log.Printf("📡 远程连接模式：按顺序尝试 %v", serverURLs)
 	}
+	log.Printf("🎙️ 音频采集后端: %s", *flagCaptureBackend)
 	log.Println("✅ 已启动")
 
 	var currentIndex int
@@ -373,12 +421,24 @@ func stopPlay(_ connect.Request) (connect.Response, error) {
 	return connect.SuccessResponse(), nil
 }
 
-func startRecording(req connect.Request) (connect.Response, error) {
+func (c *AppClient) startRecording(req connect.Request) (connect.Response, error) {
 	var config *audio.AudioConfig
 	if req.Payload != nil {
 		var cfg audio.AudioConfig
 		if err := json.Unmarshal(*req.Payload, &cfg); err == nil {
 			config = &cfg
+		}
+	}
+	if config == nil && audio.GetRecorder().DefaultBackend() == "usock" {
+		config = &audio.AudioConfig{Backend: "usock"}
+	}
+	if config != nil && config.Backend == "" && audio.GetRecorder().DefaultBackend() == "usock" {
+		config.Backend = "usock"
+	}
+	if config != nil && config.Backend == "usock" {
+		if err := c.enableUsock(); err != nil {
+			log.Printf("⚠️ speech.usock 接管失败，录音回退 noop: %v", err)
+			config.Backend = "noop"
 		}
 	}
 	err := audio.GetRecorder().StartRecording(func(data []byte) error {
@@ -392,6 +452,20 @@ func startRecording(req connect.Request) (connect.Response, error) {
 
 func stopRecording(_ connect.Request) (connect.Response, error) {
 	if err := audio.GetRecorder().StopRecording(); err != nil {
+		return connect.Response{}, err
+	}
+	return connect.SuccessResponse(), nil
+}
+
+func continueDialog(_ connect.Request) (connect.Response, error) {
+	if err := audio.GetRecorder().ContinueDialog(); err != nil {
+		return connect.Response{}, err
+	}
+	return connect.SuccessResponse(), nil
+}
+
+func finishDialog(_ connect.Request) (connect.Response, error) {
+	if err := audio.GetRecorder().FinishDialog(); err != nil {
 		return connect.Response{}, err
 	}
 	return connect.SuccessResponse(), nil

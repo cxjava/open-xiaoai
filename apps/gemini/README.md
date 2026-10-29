@@ -57,6 +57,14 @@ vim config.yaml
 ./gemini -config config.yaml
 ```
 
+如需在兼容机型上接管固件 `speech.usock`（需音箱 client 以 root 运行），可显式启用；默认 `noop` 行为不变：
+
+```shell
+./gemini -config config.yaml -capture-backend usock
+```
+
+接管失败会由 client 回滚并回退 `noop`。该模式停用 `kws.log` 轮询，连续对话会在 Gemini 播放完成后通过 `pnshelper` 请求下一轮采集。
+
 ### 4. 连接音箱
 
 确保小爱音箱的 client 已连接到本机（默认 `ws://你的IP:4399`，可在 config 中修改端口）。
@@ -66,7 +74,7 @@ vim config.yaml
 ## 数据流
 
 ```
-小爱音箱 arecord (16kHz) → client 发送 record 流
+小爱音箱 speech.usock PCM（或默认 arecord 16kHz）→ client 发送 record 流
     → apps/gemini 接收 → Gemini Live API
     → Gemini 返回 PCM (24kHz)
     → apps/gemini 发送 play 流 → client aplay 播放

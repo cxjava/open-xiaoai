@@ -128,6 +128,7 @@ func initConnection(conn *websocket.Conn, cfg *AppConfig) {
 		}
 
 		if _, err := rpc.CallRemote("start_recording", audio.AudioConfig{
+			Backend:       audio.DefaultAudioConfig.Backend,
 			PCM:           "noop",
 			Channels:      1,
 			BitsPerSample: 16,

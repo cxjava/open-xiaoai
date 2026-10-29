@@ -7,6 +7,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/cxjava/open-xiaoai/apps/client/services/audio"
+	"github.com/cxjava/open-xiaoai/apps/client/services/connect"
 )
 
 // Echo suppression: don't forward mic audio to Gemini while AI is speaking.
@@ -43,6 +46,11 @@ var (
 const (
 	playoutBytesPerSec = 48000 // 24kHz * 2bytes * 1ch
 	playoutGuardMs     = 600   // 安全余量（ms），覆盖 WS/ALSA 缓冲
+)
+
+var (
+	speechUsockActive atomic.Bool
+	captureBackend    = "noop"
 )
 
 // onTurnStart 在 AI 开始新一轮回答时调用：屏蔽 mic，重置本回合状态。
@@ -95,6 +103,11 @@ func onTurnFinished() {
 		if turnGen.Load() != gen {
 			return // 期间有新 turn 或用户打断，放弃这次解禁
 		}
+		if speechUsockActive.Load() {
+			if _, err := connect.GetRPC().CallRemote("continue_dialog", nil, nil); err != nil {
+				log.Printf("❌ speech.usock follow-up 请求失败: %v", err)
+			}
+		}
 		isAISpeaking.Store(false)
 		log.Println("🎤 mic 已解禁（请讲）")
 	}()
@@ -110,7 +123,13 @@ func onInterruptedByServer() {
 
 func main() {
 	configPath := flag.String("config", "config.yaml", "配置文件路径")
+	captureBackendFlag := flag.String("capture-backend", "noop", "音频采集后端：noop（默认）或 usock")
 	flag.Parse()
+	if *captureBackendFlag != "noop" && *captureBackendFlag != "usock" {
+		log.Fatalf("❌ 未知音频采集后端 %q（仅支持 noop 或 usock）", *captureBackendFlag)
+	}
+	audio.DefaultAudioConfig.Backend = *captureBackendFlag
+	speechUsockActive.Store(*captureBackendFlag == "usock")
 
 	cfg, err := loadConfig(*configPath)
 	if err != nil {

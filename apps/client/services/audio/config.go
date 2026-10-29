@@ -1,6 +1,7 @@
 package audio
 
 type AudioConfig struct {
+	Backend       string `json:"backend,omitempty"`
 	PCM           string `json:"pcm"`
 	Channels      int    `json:"channels"`
 	BitsPerSample int    `json:"bits_per_sample"`
@@ -10,6 +11,7 @@ type AudioConfig struct {
 }
 
 var DefaultAudioConfig = AudioConfig{
+	Backend:       "noop",
 	PCM:           "noop",
 	Channels:      1,
 	BitsPerSample: 16,

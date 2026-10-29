@@ -24,8 +24,11 @@ curl -L -o /tmp/client.tar.gz \
 tar -xzf /tmp/client.tar.gz -C /data/open-xiaoai
 chmod +x /data/open-xiaoai/client
 
-# 运行（替换成你的 server 地址）
+# 运行（替换成你的 server 地址；默认保持 noop 采集行为）
 /data/open-xiaoai/client ws://你的server地址:4399
+
+# 可选：接管固件 speech.usock（需 root；运行时 bind mount /tmp 副本，不写固件）
+/data/open-xiaoai/client -capture-backend usock ws://你的server地址:4399
 
 # 多地址：按顺序尝试，支持 LAN + Tailscale 等场景（在家用 LAN，带回老家用 Tailscale）
 /data/open-xiaoai/client ws://192.168.1.100:4399 ws://my-server:4399
@@ -171,5 +174,6 @@ ws://server地址:4399?u=alice&p=password123
 
 ## 注意事项
 
-- 当前仅支持 **小爱音箱 Pro（LX06）** 和 **Xiaomi 智能音箱 Pro（OH2P）**
+- `-capture-backend usock` 是显式 opt-in，默认仍为 `noop`。该模式仅适用于提供兼容 `/tmp/mico_aivs_lab/usock/speech.usock` 的固件，需 root 和运行时 `mount` / `umount` 权限。启动时会临时停止 `pns`、`mico_aivs_lab`，创建 PCM 运行时副本并接管 socket；成功后会 bind-mount 保护 socket，再恢复 TTS/网络服务。退出、注册失败或接管守护检测到 client/mount 异常时会尝试恢复原生 `pns` 与 `mico_aivs_lab`。
+- PCM 后端把固件通过 `speech.usock` 推送的 S16LE 流以 `record` tag 转发；原有 instruction 文本日志路径仍保留。当前仅支持 **小爱音箱 Pro（LX06）** 和 **Xiaomi 智能音箱 Pro（OH2P）**；其他机型/固件请先验证 `pns` 参数和 socket 协议。
 - 公网部署时请注意安全，默认提供执行任意脚本能力
