@@ -31,9 +31,17 @@ func GetMessageManager() *MessageManager {
 	return msgMgr
 }
 
-func (m *MessageManager) Init(conn *websocket.Conn) {
+// Init 绑定新连接。若已有不同的旧连接，则显式关闭旧连接（其读循环会随之退出），
+// 并返回 replaced=true，由调用方负责打日志说明“谁顶掉了谁”。
+func (m *MessageManager) Init(conn *websocket.Conn) (replaced bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.conn != nil && m.conn != conn {
+		replaced = true
+		m.conn.CloseNow()
+		// 旧连接上未完成的 RPC 直接失败，避免等到超时
+		GetRPC().Dispose()
+	}
 	m.conn = conn
 	m.ctx = context.Background()
 	m.done = make(chan struct{})
@@ -45,6 +53,29 @@ func (m *MessageManager) Init(conn *websocket.Conn) {
 		}
 		return m.SendText(data)
 	})
+	return replaced
+}
+
+// DisposeConn 只清理 conn 自己这条连接：若全局当前连接已被新连接替换，则不做任何事，
+// 返回 false，避免旧连接的收尾逻辑把新连接带走。
+func (m *MessageManager) DisposeConn(conn *websocket.Conn) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.conn != conn {
+		conn.CloseNow()
+		return false
+	}
+	m.conn.CloseNow()
+	m.conn = nil
+	GetRPC().Dispose()
+	return true
+}
+
+// IsCurrent 报告 conn 是否仍是当前活动连接。
+func (m *MessageManager) IsCurrent(conn *websocket.Conn) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.conn == conn
 }
 
 func (m *MessageManager) Dispose() {
@@ -114,27 +145,29 @@ func (m *MessageManager) SendStream(tag string, bytes []byte, data interface{}) 
 
 // ProcessMessages reads messages from the WebSocket until it closes or errors.
 func (m *MessageManager) ProcessMessages() error {
+	// 启动时就绑定本次连接，之后即使全局 conn 被新连接替换，
+	// 这个循环也只读自己的连接，且只关闭自己那一代的 done。
+	m.mu.Lock()
+	conn := m.conn
+	ctx := m.ctx
+	done := m.done
+	m.mu.Unlock()
+
 	defer func() {
-		m.mu.Lock()
-		if m.done != nil {
+		if done != nil {
 			select {
-			case <-m.done:
+			case <-done:
 			default:
-				close(m.done)
+				close(done)
 			}
 		}
-		m.mu.Unlock()
 	}()
 
-	for {
-		m.mu.Lock()
-		conn := m.conn
-		ctx := m.ctx
-		m.mu.Unlock()
+	if conn == nil {
+		return fmt.Errorf("WebSocket connection is not initialized")
+	}
 
-		if conn == nil {
-			return fmt.Errorf("WebSocket connection is not initialized")
-		}
+	for {
 
 		msgType, data, err := conn.Read(ctx)
 		if err != nil {

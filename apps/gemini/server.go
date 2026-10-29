@@ -81,18 +81,24 @@ func startServer(ctx context.Context, cfg *AppConfig) error {
 
 func handleConnection(conn *websocket.Conn, r *http.Request, cfg *AppConfig) {
 	log.Printf("✅ 已连接: %s", r.RemoteAddr)
-	initConnection(conn, cfg)
+	if initConnection(conn, cfg) {
+		log.Printf("🔁 新连接 %s 顶替了已有设备连接（当前仅支持单设备，旧连接已关闭）", r.RemoteAddr)
+	}
 
-	if err := connect.GetMessageManager().ProcessMessages(); err != nil {
+	err := connect.GetMessageManager().ProcessMessages()
+	if err != nil && connect.GetMessageManager().IsCurrent(conn) {
 		log.Printf("❌ 消息处理异常: %v", err)
 	}
 
-	disposeConnection()
-	log.Printf("❌ 已断开连接: %s", r.RemoteAddr)
+	if disposeConnection(conn) {
+		log.Printf("❌ 已断开连接: %s", r.RemoteAddr)
+	} else {
+		log.Printf("❌ 旧连接已被顶替并关闭: %s（不影响当前连接）", r.RemoteAddr)
+	}
 }
 
-func initConnection(conn *websocket.Conn, cfg *AppConfig) {
-	connect.GetMessageManager().Init(conn)
+func initConnection(conn *websocket.Conn, cfg *AppConfig) (replaced bool) {
+	replaced = connect.GetMessageManager().Init(conn)
 
 	connect.GetHandlers().SetEventHandler(func(event connect.Event) error {
 		log.Printf("🔥 收到 Event: %s", event.Event)
@@ -154,11 +160,16 @@ func initConnection(conn *websocket.Conn, cfg *AppConfig) {
 			log.Println("🔈 start_play OK (24kHz mono)")
 		}
 	}()
+	return replaced
 }
 
-func disposeConnection() {
-	connect.GetMessageManager().Dispose()
+// disposeConnection 只清理 conn 自己；若已被新连接顶替则什么都不动，返回 false。
+func disposeConnection(conn *websocket.Conn) bool {
+	if !connect.GetMessageManager().DisposeConn(conn) {
+		return false
+	}
 	utils.GetTaskManager().Dispose("test")
+	return true
 }
 
 // sendPlayStream sends audio bytes back to the speaker via WebSocket.

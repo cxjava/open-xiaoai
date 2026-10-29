@@ -98,18 +98,24 @@ func authorizeAppRequest(app *appRuntime, w http.ResponseWriter, r *http.Request
 
 func handleConnection(conn *websocket.Conn, r *http.Request, app *appRuntime) {
 	log.Printf("✅ 已连接: %s", r.RemoteAddr)
-	initConnection(conn, r, app)
+	if initConnection(conn, r, app) {
+		log.Printf("🔁 新连接 %s 顶替了已有设备连接（当前仅支持单设备，旧连接已关闭）", r.RemoteAddr)
+	}
 
-	if err := connect.GetMessageManager().ProcessMessages(); err != nil {
+	err := connect.GetMessageManager().ProcessMessages()
+	if err != nil && connect.GetMessageManager().IsCurrent(conn) {
 		log.Printf("❌ 消息处理异常: %v", err)
 	}
 
-	disposeConnection()
-	log.Printf("❌ 已断开连接: %s", r.RemoteAddr)
+	if disposeConnection(conn) {
+		log.Printf("❌ 已断开连接: %s", r.RemoteAddr)
+	} else {
+		log.Printf("❌ 旧连接已被顶替并关闭: %s（不影响当前连接）", r.RemoteAddr)
+	}
 }
 
-func initConnection(conn *websocket.Conn, r *http.Request, app *appRuntime) {
-	connect.GetMessageManager().Init(conn)
+func initConnection(conn *websocket.Conn, r *http.Request, app *appRuntime) (replaced bool) {
+	replaced = connect.GetMessageManager().Init(conn)
 
 	// 连接感知 base_url：客户端用哪个 host 连上来，就用同一 host 拼音乐 URL（支持 LAN/Tailscale）
 	if r.Host != "" {
@@ -170,9 +176,14 @@ func initConnection(conn *websocket.Conn, r *http.Request, app *appRuntime) {
 			log.Printf("⚠️ 欢迎语播放失败: %v", err)
 		}
 	}()
+	return replaced
 }
 
-func disposeConnection() {
-	connect.GetMessageManager().Dispose()
+// disposeConnection 只清理 conn 自己；若已被新连接顶替则什么都不动，返回 false。
+func disposeConnection(conn *websocket.Conn) bool {
+	if !connect.GetMessageManager().DisposeConn(conn) {
+		return false
+	}
 	utils.GetTaskManager().Dispose("test")
+	return true
 }
