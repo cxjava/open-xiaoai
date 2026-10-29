@@ -66,6 +66,19 @@ chmod +x /data/open-xiaoai/init.sh
 /data/open-xiaoai/init.sh -switch ws://你的IP:4399 ws://你的IP:4400
 ```
 
+`init.sh` 是一个 launcher（无参数 / 直接传地址 = `start`，行为兼容旧用法）：
+
+```sh
+init.sh start|daemon|stop|restart|status
+init.sh upgrade /path/to/new-client   # 自检 → 替换 → 重启，失败自动回滚到 client.bak
+```
+
+- 预检：二进制可执行、地址格式、server TCP 探活（有 `nc`/`wget` 时）；`OPEN_XIAOAI_STRICT=1` 时 server 不可达直接拒绝启动。
+- 单实例：用 `/tmp/xiaoai-client` 锁目录互斥，重复启动会明确报错。
+- 守护：client 退出 5 秒后自动拉起；连续 `OPEN_XIAOAI_MAX_CRASH`（默认 10）次快速崩溃后放弃并留日志。
+- `status` 输出 `running` / `degraded` / `stopped`，含 pid、server、uptime、restarts。
+- 日志在 `/tmp/xiaoai-client.log`（超过 1MB 自动截断），不写 `/data`。
+
 如果你想要开机自启动，下载 `boot.sh` 到 `/data/init.sh`，重启小爱音箱即可。`boot.sh` 会等待网络可用后，在后台执行 `/data/open-xiaoai/init.sh`。
 
 ```shell
